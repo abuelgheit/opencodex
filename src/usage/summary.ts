@@ -4,7 +4,7 @@ import { usageDisplayTotalTokens } from "./totals";
 import { isCodexUsageAccountLogLabel, type PersistedUsageEntry, type UsageStatus } from "./log";
 import { estimateAttemptCost, estimateComboCost, estimateRequestCost, serviceTierContext, tokensPerSecond } from "./cost";
 
-export type UsageRange = "7d" | "30d" | "all";
+export type UsageRange = "today" | "7d" | "30d" | "all";
 export type UsageSurface = "all" | "codex" | "claude" | "grok";
 
 export interface UsageSummaryTotals {
@@ -130,7 +130,7 @@ function retainedBreakdownRows<T>(
 }
 
 export function parseRange(input: string | null | undefined): UsageRange {
-  if (input === "7d" || input === "30d" || input === "all") return input;
+  if (input === "today" || input === "7d" || input === "30d" || input === "all") return input;
   return "30d";
 }
 
@@ -146,6 +146,7 @@ function startOfLocalDay(ts: number): number {
 }
 
 export function rangeWindow(range: UsageRange, now: number): { since: number | null; days: number } {
+  if (range === "today") return { since: startOfLocalDay(now), days: 1 };
   if (range === "7d") {
     const start = new Date(startOfLocalDay(now));
     start.setDate(start.getDate() - 6);

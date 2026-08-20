@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseRange, parseUsageSurface, summarizeUsage } from "../src/usage/summary";
+import { parseRange, parseUsageSurface, rangeWindow, summarizeUsage } from "../src/usage/summary";
 import type { PersistedUsageEntry } from "../src/usage/log";
 
 const FIXED_NOW = Date.UTC(2026, 5, 28, 12, 0, 0);
@@ -24,10 +24,41 @@ function entry(overrides: Partial<PersistedUsageEntry> & { ts: number }): Persis
 }
 
 describe("parseRange", () => {
-  test("accepts 7d / 30d / all", () => {
+  test("accepts today / 7d / 30d / all", () => {
+    expect(parseRange("today")).toBe("today");
     expect(parseRange("7d")).toBe("7d");
     expect(parseRange("30d")).toBe("30d");
     expect(parseRange("all")).toBe("all");
+  });
+
+  test("today uses local midnight, excludes yesterday, and stays stable within the day", () => {
+    const todayMidnight = new Date(2026, 7, 13, 0, 0, 0, 0).getTime();
+    const morning = todayMidnight + 2 * 3_600_000;
+    const evening = todayMidnight + 20 * 3_600_000;
+    const entries: PersistedUsageEntry[] = [
+      entry({
+        ts: todayMidnight - 1,
+        usageStatus: "reported",
+        usage: { inputTokens: 10, outputTokens: 1 },
+        totalTokens: 11,
+      }),
+      entry({
+        ts: todayMidnight + 3_600_000,
+        usageStatus: "reported",
+        usage: { inputTokens: 20, outputTokens: 2 },
+        totalTokens: 22,
+      }),
+    ];
+
+    expect(rangeWindow("today", morning)).toEqual({ since: todayMidnight, days: 1 });
+    const morningSummary = summarizeUsage(entries, "today", morning);
+    const eveningSummary = summarizeUsage(entries, "today", evening);
+    expect(morningSummary.since).toBe(todayMidnight);
+    expect(morningSummary.days).toHaveLength(1);
+    expect(morningSummary.summary).toMatchObject({ requests: 1, totalTokens: 22 });
+    expect(eveningSummary.since).toBe(todayMidnight);
+    expect(eveningSummary.days).toHaveLength(1);
+    expect(eveningSummary.summary).toMatchObject({ requests: 1, totalTokens: 22 });
   });
 
   test("defaults to 30d on null or unknown", () => {

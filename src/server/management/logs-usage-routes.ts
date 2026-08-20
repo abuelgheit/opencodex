@@ -244,7 +244,7 @@ export async function handleLogsUsageRoutes(ctx: ManagementContext): Promise<Res
       const snapshotIdentity = `${usageLogIdentityKey(snapshot.revision)}\0${effectiveReadLimit}`;
       const revisionKey = `${usageLogRevisionKey(snapshot.revision)}\0${effectiveReadLimit}`;
       const lastSeenSize = snapshot.revision?.size ?? 0;
-      const ranges: UsageRange[] = ["7d", "30d", "all"];
+      const ranges: UsageRange[] = ["today", "7d", "30d", "all"];
       const surfaces: UsageSurface[] = ["all", "codex", "claude", "grok"];
       for (const nextRange of ranges) {
         for (const nextSurface of surfaces) {
