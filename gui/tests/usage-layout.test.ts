@@ -22,13 +22,22 @@ type UsageProviderFixture = {
   shareRatio?: number;
 };
 
+type UsageModelFixture = {
+  provider: string;
+  model: string;
+  inputTokens?: unknown;
+  cacheReadInputTokens?: unknown;
+  totalTokens?: number;
+  shareRatio?: number;
+};
+
 type ProviderQuotaFixture = {
   provider?: unknown;
   updatedAt?: unknown;
   quota?: unknown;
 };
 
-function usageFixture(providers: UsageProviderFixture[]) {
+function usageFixture(providers: UsageProviderFixture[], models: UsageModelFixture[] = []) {
   return {
     range: "30d",
     surface: "all",
@@ -49,7 +58,6 @@ function usageFixture(providers: UsageProviderFixture[]) {
       coverageRatio: 1,
     },
     days: [],
-    models: [],
     providers: providers.map(provider => ({
       provider: provider.provider,
       requests: provider.requests ?? 1,
@@ -58,6 +66,19 @@ function usageFixture(providers: UsageProviderFixture[]) {
       estimatedRequests: 0,
       totalTokens: provider.totalTokens ?? 10,
       shareRatio: provider.shareRatio ?? 1,
+    })),
+    models: models.map(model => ({
+      provider: model.provider,
+      model: model.model,
+      requests: 1,
+      measuredRequests: 1,
+      reportedRequests: 1,
+      estimatedRequests: 0,
+      totalTokens: model.totalTokens ?? 10,
+      ...(model.inputTokens !== undefined ? { inputTokens: model.inputTokens } : {}),
+      outputTokens: 1,
+      ...(model.cacheReadInputTokens !== undefined ? { cacheReadInputTokens: model.cacheReadInputTokens } : {}),
+      shareRatio: model.shareRatio ?? 1,
     })),
     historyTruncated: false,
     truncatedPrefixBytes: 0,
@@ -69,11 +90,13 @@ function usageFixture(providers: UsageProviderFixture[]) {
 async function withRenderedUsage({
   providers,
   quotas,
+  models = [],
   quotaOk = true,
   assertRendered,
 }: {
   providers: UsageProviderFixture[];
   quotas: ProviderQuotaFixture[];
+  models?: UsageModelFixture[];
   quotaOk?: boolean;
   assertRendered: (container: HTMLElement) => void;
 }) {
@@ -107,7 +130,7 @@ async function withRenderedUsage({
       if (!quotaOk) return { ok: false, status: 503, statusText: "Unavailable", json: async () => ({}) };
       return { ok: true, json: async () => ({ generatedAt: Date.now(), reports: quotas }) };
     }
-    if (url.includes("/api/usage?")) return { ok: true, json: async () => usageFixture(providers) };
+    if (url.includes("/api/usage?")) return { ok: true, json: async () => usageFixture(providers, models) };
     throw new Error(`Unexpected request: ${url}`);
   }) as typeof fetch;
 
@@ -345,6 +368,41 @@ test("Usage defaults to 7 days and requests that range", async () => {
       Object.defineProperty(globalThis, key, { configurable: true, value: previous[key] });
     }
   }
+});
+
+test("Usage model table renders cache-hit percentages and keeps quota loading independent", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "openai" }],
+    quotas: [],
+    models: [{ provider: "openai", model: "gpt-5.5", inputTokens: 100, cacheReadInputTokens: 25 }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-models-title")?.parentElement?.querySelector("table");
+      const headers = [...(table?.querySelectorAll("thead th") ?? [])].map(th => th.textContent);
+      expect(headers).toEqual(["Model", "Provider", "Requests", "Measured", "Tokens", "Cache hit", "Share"]);
+      expect(table?.querySelector("tbody tr")?.querySelectorAll("td")[5]?.textContent).toBe("25%");
+      expect(container.querySelector("#usage-providers-title")).not.toBeNull();
+    },
+  });
+});
+
+test("Usage model cache-hit percentages fail closed and clamp to 0–100%", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "openai" }],
+    quotas: [],
+    models: [
+      { provider: "a", model: "missing-input", cacheReadInputTokens: 10 },
+      { provider: "b", model: "zero-input", inputTokens: 0, cacheReadInputTokens: 10 },
+      { provider: "c", model: "nonfinite-read", inputTokens: 100, cacheReadInputTokens: Number.NaN },
+      { provider: "d", model: "nonfinite-input", inputTokens: Number.NaN, cacheReadInputTokens: 10 },
+      { provider: "e", model: "negative-read", inputTokens: 100, cacheReadInputTokens: -1 },
+      { provider: "f", model: "over-read", inputTokens: 100, cacheReadInputTokens: 200 },
+    ],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-models-title")?.parentElement?.querySelector("table");
+      const values = [...(table?.querySelectorAll("tbody tr") ?? [])].map(row => row.querySelectorAll("td")[5]?.textContent);
+      expect(values).toEqual(["—", "—", "—", "—", "0%", "100%"]);
+    },
+  });
 });
 
 test("Usage places Weekly limit immediately before Share and renders provider quota percent", async () => {
