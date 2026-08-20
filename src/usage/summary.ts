@@ -63,6 +63,7 @@ export interface UsageModel {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  cacheReadInputTokens: number;
   shareRatio: number;
   estimatedCostUsd?: number;
 }
@@ -209,6 +210,22 @@ interface UsageAttribution {
   totalTokens?: number;
 }
 
+type CacheReadUsage = Pick<NonNullable<PersistedUsageEntry["usage"]>, "cacheReadInputTokens" | "cachedInputTokens" | "cacheCreationInputTokens">;
+
+function normalizedCacheReadInputTokens(usage: CacheReadUsage | undefined): number {
+  if (!usage) return 0;
+  if (typeof usage.cacheReadInputTokens === "number" && Number.isFinite(usage.cacheReadInputTokens)) {
+    return usage.cacheReadInputTokens;
+  }
+  if (typeof usage.cachedInputTokens === "number" && Number.isFinite(usage.cachedInputTokens)
+    && typeof usage.cacheCreationInputTokens === "number" && Number.isFinite(usage.cacheCreationInputTokens)) {
+    return Math.max(0, usage.cachedInputTokens - usage.cacheCreationInputTokens);
+  }
+  return typeof usage.cachedInputTokens === "number" && Number.isFinite(usage.cachedInputTokens)
+    ? usage.cachedInputTokens
+    : 0;
+}
+
 
 /**
  * Usage row identity for model breakdowns.
@@ -292,19 +309,10 @@ function addTokens(
   if (!entry.usage) return;
   totals.inputTokens += entry.usage.inputTokens;
   totals.outputTokens += entry.usage.outputTokens;
-  // Prefer the explicit read/write split; legacy claude-route rows stored read+write
-  // combined in cachedInputTokens with only the creation split present (devlog 070),
-  // so recover reads by subtracting the write share for those rows.
+  const read = normalizedCacheReadInputTokens(entry.usage);
+  totals.cachedInputTokens += read;
+  totals.cacheReadInputTokens += read;
   const creation = entry.usage.cacheCreationInputTokens;
-  const read = typeof entry.usage.cacheReadInputTokens === "number"
-    ? entry.usage.cacheReadInputTokens
-    : typeof entry.usage.cachedInputTokens === "number" && typeof creation === "number"
-      ? Math.max(0, entry.usage.cachedInputTokens - creation)
-      : entry.usage.cachedInputTokens;
-  if (typeof read === "number") {
-    totals.cachedInputTokens += read;
-    totals.cacheReadInputTokens += read;
-  }
   if (typeof creation === "number") totals.cacheCreationInputTokens += creation;
   if (typeof entry.usage.reasoningOutputTokens === "number") totals.reasoningOutputTokens += entry.usage.reasoningOutputTokens;
   totals.totalTokens += usageDisplayTotalTokens(entry.usage, entry.totalTokens) ?? 0;
@@ -426,6 +434,7 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
           totalTokens: 0,
           inputTokens: 0,
           outputTokens: 0,
+          cacheReadInputTokens: 0,
           shareRatio: 0,
         };
         byKey.set(key, model);
@@ -439,6 +448,7 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
       if (attribution.usage) {
         model.inputTokens += attribution.usage.inputTokens;
         model.outputTokens += attribution.usage.outputTokens;
+        model.cacheReadInputTokens += normalizedCacheReadInputTokens(attribution.usage);
         model.totalTokens += usageDisplayTotalTokens(attribution.usage, attribution.totalTokens) ?? 0;
       }
     }
@@ -493,6 +503,7 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
       totalTokens: 0,
       inputTokens: 0,
       outputTokens: 0,
+      cacheReadInputTokens: 0,
       shareRatio: 0,
     };
     for (const model of overflow) {
@@ -500,6 +511,7 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
       other.totalTokens += model.totalTokens;
       other.inputTokens += model.inputTokens;
       other.outputTokens += model.outputTokens;
+      other.cacheReadInputTokens += model.cacheReadInputTokens;
       if (model.estimatedCostUsd !== undefined) {
         other.estimatedCostUsd = (other.estimatedCostUsd ?? 0) + model.estimatedCostUsd;
       }
@@ -655,12 +667,7 @@ function buildAccounts(entries: PersistedUsageEntry[]): UsageAccount[] {
     row.inputTokens += input.usage!.inputTokens;
     row.outputTokens += input.usage!.outputTokens;
     const creation = input.usage!.cacheCreationInputTokens;
-    const read = typeof input.usage!.cacheReadInputTokens === "number"
-      ? input.usage!.cacheReadInputTokens
-      : typeof input.usage!.cachedInputTokens === "number" && typeof creation === "number"
-        ? Math.max(0, input.usage!.cachedInputTokens - creation)
-        : input.usage!.cachedInputTokens;
-    if (typeof read === "number") row.cacheReadInputTokens += read;
+    row.cacheReadInputTokens += normalizedCacheReadInputTokens(input.usage);
     if (typeof creation === "number") row.cacheCreationInputTokens += creation;
     if (typeof input.usage!.reasoningOutputTokens === "number") {
       row.reasoningOutputTokens += input.usage!.reasoningOutputTokens;

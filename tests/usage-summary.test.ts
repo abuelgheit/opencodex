@@ -396,7 +396,7 @@ describe("summarizeUsage", () => {
     expect(sum.summary.cacheCreationInputTokens).toBe(20);
     expect(sum.summary.totalTokens).toBe(120);
     expect(sum.days.find(day => day.requests === 1)?.totalTokens).toBe(120);
-    expect(sum.models[0].totalTokens).toBe(120);
+    expect(sum.models[0]).toMatchObject({ totalTokens: 120, cacheReadInputTokens: 50 });
     expect(sum.providers[0].totalTokens).toBe(120);
   });
 
@@ -412,18 +412,42 @@ describe("summarizeUsage", () => {
           inputTokens: 744002,
           outputTokens: 1875,
           totalTokens: 745877,
-          cachedInputTokens: 743998,
-          cacheCreationInputTokens: 743998,
+          cachedInputTokens: 100,
+          cacheCreationInputTokens: 20,
         },
         totalTokens: 1489875,
       }),
     ];
     const sum = summarizeUsage(entries, "30d", FIXED_NOW);
 
-    expect(sum.summary.cacheReadInputTokens).toBe(0);
-    expect(sum.summary.cacheCreationInputTokens).toBe(743998);
+    expect(sum.summary.cacheReadInputTokens).toBe(80);
+    expect(sum.summary.cacheCreationInputTokens).toBe(20);
+    expect(sum.models[0].cacheReadInputTokens).toBe(80);
     // the inflated outer total is healed by the inner usage.totalTokens
     expect(sum.summary.totalTokens).toBe(745877);
+  });
+
+  test("invalid or missing cache-read data contributes zero to model rows", () => {
+    const entries: PersistedUsageEntry[] = [
+      entry({
+        ts: FIXED_NOW - 1000,
+        provider: "openai",
+        model: "gpt-5.5",
+        usageStatus: "reported",
+        usage: { inputTokens: 10, outputTokens: 1, cacheReadInputTokens: Number.NaN, cachedInputTokens: Number.POSITIVE_INFINITY },
+      }),
+      entry({
+        ts: FIXED_NOW - 2000,
+        provider: "anthropic",
+        model: "claude-fable-5",
+        usageStatus: "reported",
+        usage: { inputTokens: 10, outputTokens: 1 },
+      }),
+    ];
+    const sum = summarizeUsage(entries, "30d", FIXED_NOW);
+    expect(sum.summary.cacheReadInputTokens).toBe(0);
+    expect(sum.models.find(model => model.provider === "openai")?.cacheReadInputTokens).toBe(0);
+    expect(sum.models.find(model => model.provider === "anthropic")?.cacheReadInputTokens).toBe(0);
   });
 
   test("Kiro estimated totals count as measured for coverage and model rows", () => {
@@ -496,14 +520,15 @@ describe("summarizeUsage", () => {
 
   test("models and providers are aggregated and share-sorted", () => {
     const entries: PersistedUsageEntry[] = [
-      entry({ ts: FIXED_NOW - 1, provider: "openai", model: "gpt-5.5", usageStatus: "reported", usage: { inputTokens: 4, outputTokens: 2 }, totalTokens: 6 }),
-      entry({ ts: FIXED_NOW - 2, provider: "openai", model: "gpt-5.5", usageStatus: "reported", usage: { inputTokens: 2, outputTokens: 1 }, totalTokens: 3 }),
+      entry({ ts: FIXED_NOW - 1, provider: "openai", model: "gpt-5.5", usageStatus: "reported", usage: { inputTokens: 4, outputTokens: 2, cacheReadInputTokens: 3 }, totalTokens: 6 }),
+      entry({ ts: FIXED_NOW - 2, provider: "openai", model: "gpt-5.5", usageStatus: "reported", usage: { inputTokens: 2, outputTokens: 1, cacheReadInputTokens: 2 }, totalTokens: 3 }),
       entry({ ts: FIXED_NOW - 3, provider: "anthropic", model: "claude-x", usageStatus: "unreported" }),
     ];
     const sum = summarizeUsage(entries, "30d", FIXED_NOW);
     expect(sum.models[0].model).toBe("gpt-5.5");
     expect(sum.models[0].requests).toBe(2);
     expect(sum.models[0].totalTokens).toBe(9);
+    expect(sum.models[0].cacheReadInputTokens).toBe(5);
     expect(sum.providers[0].provider).toBe("openai");
     expect(sum.providers[0].shareRatio).toBeCloseTo(1);
   });
@@ -842,7 +867,7 @@ describe("summarizeUsage", () => {
       provider: `provider-${index}`,
       model: `model-${index}`,
       usageStatus: "reported",
-      usage: { inputTokens: 1, outputTokens: 1 },
+      usage: { inputTokens: 1, outputTokens: 1, ...(index >= 255 ? { cacheReadInputTokens: 1 } : {}) },
       totalTokens: 2,
     }));
     const sum = summarizeUsage(entries, "30d", FIXED_NOW);
@@ -857,6 +882,7 @@ describe("summarizeUsage", () => {
       reportedRequests: 1,
       inputTokens: 5,
       outputTokens: 5,
+      cacheReadInputTokens: 5,
       totalTokens: 10,
     });
     expect(sum.days.find(day => day.requests > 0)?.models.at(-1)).toMatchObject({
