@@ -43,6 +43,8 @@ interface UsageDay {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens?: number;
+  cacheReadInputTokens?: number;
   models: UsageDayModel[];
 }
 
@@ -60,6 +62,8 @@ interface UsageHour {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens?: number;
+  cacheReadInputTokens?: number;
   models: UsageDayModel[];
 }
 
@@ -232,6 +236,8 @@ function lastSevenDays(days: UsageDay[]): UsageDay[] {
       measuredRequests: d?.measuredRequests ?? 0,
       reportedRequests: d?.reportedRequests ?? 0,
       totalTokens: d?.totalTokens ?? 0,
+      inputTokens: d?.inputTokens ?? 0,
+      cacheReadInputTokens: d?.cacheReadInputTokens ?? 0,
       models: d?.models ?? [],
     });
     cursor.setDate(cursor.getDate() + 1);
@@ -249,6 +255,8 @@ function emptyTodayHours(): UsageHour[] {
     measuredRequests: 0,
     reportedRequests: 0,
     totalTokens: 0,
+    inputTokens: 0,
+    cacheReadInputTokens: 0,
     models: [],
   }));
 }
@@ -451,6 +459,14 @@ function activityBarTooltipLabel(bar: UsageActivityBar): string {
   return "hour" in bar ? `${bar.date} ${String(bar.hour).padStart(2, "0")}:00` : bar.date;
 }
 
+function activityBarCacheHitPercentage(bar: UsageActivityBar): string {
+  if (!Number.isFinite(bar.inputTokens) || (bar.inputTokens ?? 0) <= 0) return "—";
+  if (!Number.isFinite(bar.cacheReadInputTokens)) return "—";
+  const ratio = (bar.cacheReadInputTokens ?? 0) / (bar.inputTokens ?? 0);
+  if (!Number.isFinite(ratio)) return "—";
+  return formatPct(Math.min(1, Math.max(0, ratio)));
+}
+
 function UsageActivityBars({
   bars,
   locale,
@@ -509,6 +525,7 @@ function UsageActivityBars({
                 </div>
               )}
               <span className="daybar-count">{formatTokens(bar.totalTokens, locale)}</span>
+              <span className="daybar-cache" title={t("usage.col.cacheHit")}>{activityBarCacheHitPercentage(bar)}</span>
               <span className="daybar-label muted">{label}</span>
             </div>
           );

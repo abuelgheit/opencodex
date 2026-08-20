@@ -179,8 +179,9 @@ data" and "a genuine 0% hit rate" are different facts and a chart that renders t
 misleading.
 
 For `range=today`, the response also includes `hours`: 24 zero-filled local-clock buckets for the
-current day. Each bucket carries the same request, token, and per-model breakdown fields as a daily
-row, so clients can render an hourly activity chart. Other ranges return `hours: []`.
+current day. Each daily or hourly bucket includes `inputTokens` and `cacheReadInputTokens` so
+clients can calculate and display cache-hit percentages, along with the request, total-token, and
+per-model breakdown fields. Other ranges return `hours: []`.
 
 :::caution
 Storage cleanup endpoints can move or permanently remove archived session data. Always preview

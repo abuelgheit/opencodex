@@ -2587,6 +2587,7 @@ button.prov-account-row.active { cursor: default; }
 }
 .daybar-seg { width: 100%; min-height: 1px; }
 .daybar-count { font-size: var(--text-label); font-weight: var(--weight-semibold); color: var(--text); }
+.daybar-cache { font-size: var(--text-micro); color: var(--muted); font-variant-numeric: tabular-nums; }
 .daybar-label { font-size: var(--text-caption); white-space: nowrap; }
 .daybar:hover .daybar-track { outline: 1px solid var(--border); }
 .daybar-tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 5;

@@ -390,6 +390,8 @@ test("Usage renders Today as hourly bars and keeps the seven-day chart", async (
   expect(src).toContain('hourly />');
   expect(src).toContain(') : range === "7d" ? (');
   expect(src).toContain("<WeekDayBars weekBars={weekBars}");
+  expect(src).toContain("activityBarCacheHitPercentage");
+  expect(src).toContain('className="daybar-cache"');
 });
 
 test("Usage model table renders speed and cache-hit columns while quota loading stays independent", async () => {

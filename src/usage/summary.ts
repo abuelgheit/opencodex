@@ -52,6 +52,8 @@ export interface UsageDay {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens: number;
+  cacheReadInputTokens: number;
   /** Display-time estimated cost for this local day, summed from its model rows. */
   estimatedCostUsd: number;
   models: UsageDayModel[];
@@ -81,6 +83,8 @@ export interface UsageHour {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens: number;
+  cacheReadInputTokens: number;
   models: UsageDayModel[];
 }
 
@@ -1534,6 +1538,8 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
         measuredRequests: day.totals.measuredRequests,
         reportedRequests: day.totals.reportedRequests,
         totalTokens: day.totals.totalTokens,
+        inputTokens: day.totals.inputTokens,
+        cacheReadInputTokens: day.totals.cacheReadInputTokens,
         estimatedCostUsd: day.totals.estimatedCostUsd,
         models: buildDayModels(day.models, day.modelOverlaps),
       }));
@@ -1549,6 +1555,8 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
           measuredRequests: hour.totals.measuredRequests,
           reportedRequests: hour.totals.reportedRequests,
           totalTokens: hour.totals.totalTokens,
+          inputTokens: hour.totals.inputTokens,
+          cacheReadInputTokens: hour.totals.cacheReadInputTokens,
           models: buildDayModels(hour.models, hour.modelOverlaps),
         };
       })
