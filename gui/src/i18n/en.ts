@@ -820,6 +820,7 @@ export const en = {
   "usage.historyTruncatedWindow": "Loaded rows have request start times ranging from {start} to {end}. Earlier file entries were omitted by the read limit, so any selected range may be incomplete.",
   "usage.range.30d": "30d",
   "usage.range.7d": "7d",
+  "usage.range.today": "Today",
   "usage.card.requests": "Requests",
   "usage.card.measured": "Measured",
   "usage.card.reported": "Reported",

@@ -811,6 +811,7 @@ export const tr: Record<TKey, string> = {
   "usage.historyTruncatedWindow": "Yüklenen satırların istek başlangıç zamanları {start} ile {end} arasındadır. Dosyanın önceki kayıtları okuma sınırı nedeniyle atlandı, bu yüzden seçilen aralık eksik olabilir.",
   "usage.range.30d": "30 gün",
   "usage.range.7d": "7 gün",
+  "usage.range.today": "Bugün",
   "usage.card.requests": "İstekler",
   "usage.card.measured": "Ölçülen",
   "usage.card.reported": "Bildirilen",

@@ -630,6 +630,7 @@ export const zhTW: Record<TKey, string> = {
   "usage.range.all": "全部",
   "usage.range.30d": "30 天",
   "usage.range.7d": "7 天",
+  "usage.range.today": "今天",
   "usage.card.requests": "請求數",
   "usage.card.measured": "已計量",
   "usage.card.reported": "已上報",

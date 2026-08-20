@@ -805,6 +805,7 @@ export const ko: Record<TKey, string> = {
   "usage.historyTruncatedWindow": "불러온 기록의 요청 시작 시각은 {start}부터 {end} 사이입니다. 읽기 한도 때문에 파일 앞부분의 기록이 빠졌으므로 선택한 기간이 완전하지 않을 수 있습니다.",
   "usage.range.30d": "30일",
   "usage.range.7d": "7일",
+  "usage.range.today": "오늘",
   "usage.card.requests": "요청",
   "usage.card.measured": "측정됨",
   "usage.card.reported": "측정됨",
