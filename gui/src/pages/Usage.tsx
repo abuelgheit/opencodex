@@ -1277,6 +1277,7 @@ function UsageWorkspaceBody({
 
 /** Held usage payloads so provider/surface tab switches skip a cold ~5s refetch. */
 const usageMemoryCache = new Map<string, UsageResponse>();
+const USAGE_REFRESH_MS = 5_000;
 
 type UsageScope = "machine" | "hub";
 
@@ -1346,7 +1347,7 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
     resourceKey,
     [apiBase, apiKeyId, connected, range, scope, surface, since, until],
     loadUsage,
-    { isEmpty: () => false, initialData: cached ?? undefined },
+    { isEmpty: () => false, initialData: cached ?? undefined, pollMs: USAGE_REFRESH_MS },
   );
   const { state } = resource;
   const data = state.data ?? cached ?? null;
@@ -1359,6 +1360,7 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
       return await response.json();
     },
+    { pollMs: USAGE_REFRESH_MS },
   );
   const weeklyQuotas = useMemo(() => weeklyQuotaLookup(providerQuotaResource.data), [providerQuotaResource.data]);
 
