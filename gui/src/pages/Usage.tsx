@@ -64,6 +64,7 @@ interface UsageModel {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  cacheReadInputTokens?: number;
   shareRatio: number;
 }
 
@@ -157,6 +158,14 @@ function weeklyQuotaLookup(payload: unknown): Map<string, WeeklyQuota> {
 
 function formatPct(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
+}
+
+function modelCacheHitPercentage(model: Pick<UsageModel, "inputTokens" | "cacheReadInputTokens">): string {
+  if (!Number.isFinite(model.inputTokens) || model.inputTokens <= 0) return "—";
+  if (!Number.isFinite(model.cacheReadInputTokens)) return "—";
+  const percentage = (model.cacheReadInputTokens! / model.inputTokens) * 100;
+  if (!Number.isFinite(percentage)) return "—";
+  return `${Math.round(Math.min(100, Math.max(0, percentage)))}%`;
 }
 
 function cacheHitPercentage(summary: Pick<UsageSummaryTotals, "inputTokens" | "cachedInputTokens" | "cacheReadInputTokens">): string {
@@ -584,6 +593,7 @@ function UsageModelsTable({
             <th className="num">{t("usage.col.requests")}</th>
             <th className="num">{t("usage.col.measured")}</th>
             <th className="num">{t("usage.col.tokens")}</th>
+            <th>{t("usage.col.cacheHit")}</th>
             <th>{t("usage.col.share")}</th>
           </tr>
         </thead>
@@ -595,6 +605,7 @@ function UsageModelsTable({
               <td className="num">{model.requests}</td>
               <td className="num">{model.measuredRequests}</td>
               <td className="num mono">{formatTokens(model.totalTokens, locale)}</td>
+              <td>{modelCacheHitPercentage(model)}</td>
               <td><div className="usage-bar"><div className="usage-bar-fill" style={{ width: `${Math.round(model.shareRatio * 100)}%` }} /></div></td>
             </tr>
           ))}

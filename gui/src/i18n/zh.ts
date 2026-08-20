@@ -822,6 +822,7 @@ export const zh: Record<TKey, string> = {
   "usage.col.requests": "请求数",
   "usage.col.measured": "已计量",
   "usage.col.reported": "已上报",
+  "usage.col.cacheHit": "缓存命中",
   "usage.col.tokens": "Token 数",
   "usage.col.share": "占比",
   "usage.heatmap.less": "少",

@@ -412,19 +412,37 @@ describe("summarizeUsage", () => {
           inputTokens: 744002,
           outputTokens: 1875,
           totalTokens: 745877,
-          cachedInputTokens: 100,
-          cacheCreationInputTokens: 20,
+          cachedInputTokens: 743998,
+          cacheCreationInputTokens: 743998,
         },
         totalTokens: 1489875,
       }),
     ];
     const sum = summarizeUsage(entries, "30d", FIXED_NOW);
 
-    expect(sum.summary.cacheReadInputTokens).toBe(80);
-    expect(sum.summary.cacheCreationInputTokens).toBe(20);
-    expect(sum.models[0].cacheReadInputTokens).toBe(80);
+    expect(sum.summary.cacheReadInputTokens).toBe(0);
+    expect(sum.summary.cacheCreationInputTokens).toBe(743998);
+    expect(sum.models[0].cacheReadInputTokens).toBe(0);
     // the inflated outer total is healed by the inner usage.totalTokens
     expect(sum.summary.totalTokens).toBe(745877);
+  });
+
+  test("legacy combined cache values subtract writes to recover reads", () => {
+    const sum = summarizeUsage([entry({
+      ts: FIXED_NOW - 1000,
+      provider: "anthropic",
+      usageStatus: "reported",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cachedInputTokens: 100,
+        cacheCreationInputTokens: 20,
+      },
+      totalTokens: 120,
+    })], "30d", FIXED_NOW);
+
+    expect(sum.summary.cacheReadInputTokens).toBe(80);
+    expect(sum.models[0].cacheReadInputTokens).toBe(80);
   });
 
   test("invalid or missing cache-read data contributes zero to model rows", () => {

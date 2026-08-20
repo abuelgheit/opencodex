@@ -807,6 +807,7 @@ export const de: Record<TKey, string> = {
   "usage.col.requests": "Anfragen",
   "usage.col.measured": "Gemessen",
   "usage.col.reported": "Gemeldet",
+  "usage.col.cacheHit": "Cache-Treffer",
   "usage.col.tokens": "Tokens",
   "usage.col.share": "Anteil",
   "usage.heatmap.less": "Weniger",
