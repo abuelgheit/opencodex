@@ -800,6 +800,7 @@ export const ja: Record<TKey, string> = {
   "usage.historyTruncatedWindow": "読み込まれた行のリクエスト開始時刻は {start} から {end} の範囲です。読み取り上限によりファイル前方の記録が除外されているため、選択した期間は不完全な場合があります。",
   "usage.range.30d": "30日",
   "usage.range.7d": "7日",
+  "usage.range.today": "今日",
   "usage.card.requests": "リクエスト",
   "usage.card.measured": "計測",
   "usage.card.reported": "報告",

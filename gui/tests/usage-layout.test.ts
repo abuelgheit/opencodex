@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act, createElement } from "react";
 import { clearClientResourceStoresForTests } from "../src/client-resource";
 import { LanguageProvider } from "../src/i18n/provider";
+import { DICTS, I18nContext, interpolate, type TFn } from "../src/i18n/shared";
 import Usage from "../src/pages/Usage";
 
 type UsageCacheSummary = {
@@ -309,7 +310,7 @@ test("Usage clamps negative cache-read percentages to 0%", async () => {
   });
 });
 
-test("Usage defaults to 7 days and requests that range", async () => {
+test("Usage defaults to Today and requests that range", async () => {
   const globalKeys = ["document", "window", "navigator", "localStorage", "ResizeObserver", "IS_REACT_ACT_ENVIRONMENT"] as const;
   const previous = Object.fromEntries(globalKeys.map(key => [key, Reflect.get(globalThis, key)]));
   const originalFetch = globalThis.fetch;
@@ -347,20 +348,27 @@ test("Usage defaults to 7 days and requests that range", async () => {
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(container);
   try {
+    const t: TFn = (key, vars) => key === "usage.range.today"
+      ? "Today"
+      : interpolate(DICTS.en[key] ?? key, vars);
     await act(async () => {
-      root.render(createElement(LanguageProvider, null, createElement(Usage, { apiBase })));
+      root.render(createElement(
+        I18nContext.Provider,
+        { value: { locale: "en", setLocale: () => {}, t } },
+        createElement(Usage, { apiBase }),
+      ));
     });
     const deadline = Date.now() + 1_000;
-    while (!requestedUrls.some(url => url.includes("/api/usage?range=7d"))) {
-      if (Date.now() >= deadline) throw new Error("Usage did not request the default 7d range");
+    while (!requestedUrls.some(url => url.includes("/api/usage?range=today"))) {
+      if (Date.now() >= deadline) throw new Error("Usage did not request the default today range");
       await act(async () => {
         await new Promise<void>(resolve => testWindow.setTimeout(resolve, 10));
       });
     }
 
     const rangeButtons = [...(container.querySelectorAll(".usage-head .usage-segmented")[1]?.querySelectorAll("button") ?? [])];
-    expect(rangeButtons.map(button => button.textContent)).toEqual(["7d", "30d", "Available history"]);
-    expect(rangeButtons.map(button => button.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
+    expect(rangeButtons.map(button => button.textContent)).toEqual(["Today", "7d", "30d", "Available history"]);
+    expect(rangeButtons.map(button => button.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false"]);
     expect(requestedUrls.some(url => url.endsWith("/api/provider-quotas"))).toBe(true);
   } finally {
     await act(async () => { root.unmount(); });
@@ -372,6 +380,15 @@ test("Usage defaults to 7 days and requests that range", async () => {
       Object.defineProperty(globalThis, key, { configurable: true, value: previous[key] });
     }
   }
+});
+
+test("Usage renders Today as a one-day bar instead of the seven-day chart", async () => {
+  const src = await Bun.file(new URL("../src/pages/Usage.tsx", import.meta.url)).text();
+  expect(src).toContain("const todayBars = useMemo");
+  expect(src).toContain('{range === "today" ? (');
+  expect(src).toContain("<WeekDayBars weekBars={todayBars}");
+  expect(src).toContain(') : range === "7d" ? (');
+  expect(src).toContain("<WeekDayBars weekBars={weekBars}");
 });
 
 test("Usage model table renders speed and cache-hit columns while quota loading stays independent", async () => {

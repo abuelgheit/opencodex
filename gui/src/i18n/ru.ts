@@ -841,6 +841,7 @@ export const ru: Record<TKey, string> = {
   "usage.historyTruncatedWindow": "У загруженных записей время начала запроса находится в диапазоне от {start} до {end}. Более ранние записи файла пропущены из-за лимита чтения, поэтому выбранный период может быть неполным.",
   "usage.range.30d": "30 дн.",
   "usage.range.7d": "7 дн.",
+  "usage.range.today": "Сегодня",
   "usage.card.requests": "Запросы",
   "usage.card.measured": "Измерено",
   "usage.card.reported": "Сообщено",

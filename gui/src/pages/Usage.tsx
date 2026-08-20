@@ -13,7 +13,7 @@ import { SectionTabs } from "../components/section-tabs";
 import { sectionAnchorId } from "../section-anchors";
 import { formatResetFuture } from "../components/QuotaBars";
 
-type Range = "all" | "30d" | "7d";
+type Range = "today" | "7d" | "30d" | "all";
 type UsageSurface = "all" | "codex" | "claude" | "grok";
 
 interface UsageSummaryTotals {
@@ -344,7 +344,7 @@ function UsageFilters({
         })}
       </div>
       <div className="usage-segmented" role="group" aria-label={t("usage.title")}>
-        {(["7d", "30d", "all"] as Range[]).map(choice => {
+        {(["today", "7d", "30d", "all"] as Range[]).map(choice => {
           const label = choice === "all" ? t("usage.range.available") : t(`usage.range.${choice}`);
           return (
             <button
@@ -469,12 +469,14 @@ function UsageHeatmapPanel({
   range,
   heatmap,
   weekBars,
+  todayBars,
   locale,
   t,
 }: {
   range: Range;
   heatmap: ReturnType<typeof buildHeatmap>;
   weekBars: UsageDay[];
+  todayBars: UsageDay[];
   locale: Locale;
   t: TFn;
 }) {
@@ -494,7 +496,9 @@ function UsageHeatmapPanel({
   return (
     <section className="panel" style={{ marginTop: 16 }} aria-labelledby="usage-heatmap-title">
       <h3 id="usage-heatmap-title" className="panel-title">{t("usage.section.heatmap")}</h3>
-      {range === "7d" ? (
+      {range === "today" ? (
+        <WeekDayBars weekBars={todayBars} locale={locale} t={t} />
+      ) : range === "7d" ? (
         <WeekDayBars weekBars={weekBars} locale={locale} t={t} />
       ) : (
         <div className="heatmap" ref={heatmapRef} role="img" aria-labelledby="usage-heatmap-title">
@@ -768,6 +772,7 @@ function UsageWorkspaceBody({
   data,
   heatmap,
   weekBars,
+  todayBars,
   activeDays,
   filteredModels,
   modelQuery,
@@ -781,6 +786,7 @@ function UsageWorkspaceBody({
   data: UsageResponse | null;
   heatmap: ReturnType<typeof buildHeatmap>;
   weekBars: UsageDay[];
+  todayBars: UsageDay[];
   activeDays: number;
   filteredModels: UsageModel[];
   modelQuery: string;
@@ -800,7 +806,7 @@ function UsageWorkspaceBody({
       body: data ? (
         <>
           <UsageSummaryCards summary={data.summary} activeDays={activeDays} locale={locale} t={t} />
-          <UsageHeatmapPanel range={range} heatmap={heatmap} weekBars={weekBars} locale={locale} t={t} />
+          <UsageHeatmapPanel range={range} heatmap={heatmap} weekBars={weekBars} todayBars={todayBars} locale={locale} t={t} />
         </>
       ) : null,
     },
@@ -874,7 +880,7 @@ function writeHeldUsage(apiBase: string, range: Range, surface: UsageSurface, co
 
 export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBase: string; connected?: boolean; apiKeyId?: string }) {
   const { t, locale } = useI18n();
-  const [range, setRange] = useState<Range>("7d");
+  const [range, setRange] = useState<Range>("today");
   const [surface, setSurface] = useState<UsageSurface>("all");
   const [scope, setScope] = useState<UsageScope>("machine");
   const [modelQuery, setModelQuery] = useState("");
@@ -915,6 +921,12 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
 
   const heatmap = useMemo(() => buildHeatmap(data?.days ?? []), [data?.days]);
   const weekBars = useMemo(() => lastSevenDays(data?.days ?? []), [data?.days]);
+  const todayBars = useMemo(() => {
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const currentDay = data?.days.find(day => day.date === date);
+    return [currentDay ?? { date, requests: 0, measuredRequests: 0, reportedRequests: 0, totalTokens: 0, models: [] }];
+  }, [data?.days]);
   const activeDays = useMemo(() => (data?.days ?? []).filter(d => d.requests > 0).length, [data?.days]);
   const filteredModels = useMemo(() => {
     const q = modelQuery.trim().toLowerCase();
@@ -991,6 +1003,7 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
             data={data}
             heatmap={heatmap}
             weekBars={weekBars}
+            todayBars={todayBars}
             activeDays={activeDays}
             filteredModels={filteredModels}
             modelQuery={modelQuery}

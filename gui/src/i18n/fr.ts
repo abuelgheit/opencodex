@@ -834,6 +834,7 @@ export const fr: Record<TKey, string> = {
   "usage.historyTruncatedWindow": "Les heures de début des requêtes dans les lignes chargées vont de {start} à {end}. Les entrées antérieures du fichier ont été omises en raison de la limite de lecture ; toute période sélectionnée peut donc être incomplète.",
   "usage.range.30d": "30 j",
   "usage.range.7d": "7 j",
+  "usage.range.today": "Aujourd’hui",
   "usage.card.requests": "Requêtes",
   "usage.card.measured": "Mesurées",
   "usage.card.reported": "Communiquées",

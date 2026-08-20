@@ -820,6 +820,7 @@ export const de: Record<TKey, string> = {
   "usage.historyTruncatedWindow": "Die geladenen Zeilen haben Anfragestartzeiten zwischen {start} und {end}. Frühere Dateieinträge wurden durch das Leselimit ausgelassen, daher kann jeder gewählte Zeitraum unvollständig sein.",
   "usage.range.30d": "30d",
   "usage.range.7d": "7d",
+  "usage.range.today": "Heute",
   "usage.card.requests": "Anfragen",
   "usage.card.measured": "Gemessen",
   "usage.card.reported": "Gemeldet",
