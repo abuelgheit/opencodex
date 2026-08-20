@@ -482,8 +482,8 @@ for cache affinity. The cache key includes model and full tool schemas.
 **Token math:** Anthropic output subtracts `cached_tokens` and `cache_write_tokens` from
 `input_tokens`, exposing them as `cache_read_input_tokens` and `cache_creation_input_tokens`.
 Request logs map those back to inclusive `inputTokens`, with reads in both `cachedInputTokens` and
-`cacheReadInputTokens`, writes in `cacheCreationInputTokens`. The Usage page reports cache hits
-and cache creation separately.
+`cacheReadInputTokens`, writes in `cacheCreationInputTokens`. The Usage page reports the cache-read
+token count plus its percentage of total input tokens; cache creation is shown separately.
 
 **count_tokens:** routed models use an approximation (serialized system + messages + tools).
 Native Anthropic models with an `sk-ant-` credential pass the request through to the real

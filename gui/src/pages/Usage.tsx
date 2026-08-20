@@ -100,6 +100,20 @@ function formatPct(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
 }
 
+function cacheHitPercentage(summary: Pick<UsageSummaryTotals, "inputTokens" | "cachedInputTokens" | "cacheReadInputTokens">): string {
+  if (!Number.isFinite(summary.inputTokens) || summary.inputTokens <= 0) return "—";
+
+  const ratio = cacheReadInputTokens(summary) / summary.inputTokens;
+  if (!Number.isFinite(ratio)) return "—";
+
+  const clampedRatio = Math.min(1, Math.max(0, ratio));
+  return formatPct(clampedRatio);
+}
+
+function cacheReadInputTokens(summary: Pick<UsageSummaryTotals, "cachedInputTokens" | "cacheReadInputTokens">): number {
+  return summary.cacheReadInputTokens ?? summary.cachedInputTokens;
+}
+
 // Stable per-model bar color: hash the provider/model id to a hue so the same model keeps its color
 // across days and renders. Saturation/lightness are fixed for a cohesive palette on the dark chart.
 function modelColor(model: string, provider: string): string {
@@ -289,7 +303,7 @@ function UsageSummaryCards({
       <div className="stat"><div className="muted">{t("usage.card.totalTokens")}</div><div className="stat-value">{formatTokens(summary.totalTokens, locale)}</div></div>
       <div className="stat" title={t("usage.card.cachedTokensHint")}>
         <div className="muted">{t("usage.card.cachedTokens")}</div>
-        <div className="stat-value">{formatTokens(summary.cacheReadInputTokens ?? summary.cachedInputTokens, locale)}</div>
+        <div className="stat-value">{formatTokens(cacheReadInputTokens(summary), locale)} ({cacheHitPercentage(summary)})</div>
         {(summary.cacheCreationInputTokens ?? 0) > 0 && (
           <div className="muted text-caption">
             {t("usage.card.cacheWriteTokens")}: {formatTokens(summary.cacheCreationInputTokens ?? 0, locale)}

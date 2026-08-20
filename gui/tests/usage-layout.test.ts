@@ -5,6 +5,153 @@ import { clearClientResourceStoresForTests } from "../src/client-resource";
 import { LanguageProvider } from "../src/i18n/provider";
 import Usage from "../src/pages/Usage";
 
+type UsageCacheSummary = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+};
+
+let usageCacheTestCase = 0;
+
+async function withUsageCacheCard(summary: UsageCacheSummary, assertCard: (card: Element) => void) {
+  const globalKeys = ["document", "window", "navigator", "localStorage", "ResizeObserver", "IS_REACT_ACT_ENVIRONMENT"] as const;
+  const previous = Object.fromEntries(globalKeys.map(key => [key, Reflect.get(globalThis, key)]));
+  const originalFetch = globalThis.fetch;
+  const testWindow = new Window({ url: "http://localhost/" });
+  const apiBase = `http://usage-cache-test-${++usageCacheTestCase}`;
+  const windowResizeObserver = Reflect.get(testWindow, "ResizeObserver");
+  const resizeObserver = typeof windowResizeObserver === "function"
+    ? windowResizeObserver
+    : class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      };
+  Object.defineProperties(globalThis, {
+    document: { configurable: true, value: testWindow.document },
+    window: { configurable: true, value: testWindow },
+    navigator: { configurable: true, value: testWindow.navigator },
+    localStorage: { configurable: true, value: testWindow.localStorage },
+    ResizeObserver: { configurable: true, value: resizeObserver },
+  });
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  clearClientResourceStoresForTests();
+  globalThis.fetch = (async () => ({
+    ok: true,
+    json: async () => ({
+      range: "30d",
+      surface: "all",
+      since: null,
+      generatedAt: Date.now(),
+      summary: {
+        requests: 1,
+        measuredRequests: 1,
+        reportedRequests: 1,
+        unreportedRequests: 0,
+        unsupportedRequests: 0,
+        estimatedRequests: 0,
+        ...summary,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+        totalTokens: Number.isFinite(summary.inputTokens) ? Math.max(0, summary.inputTokens) + 10 : 10,
+        coverageRatio: 1,
+      },
+      days: [],
+      models: [],
+      providers: [],
+      historyTruncated: false,
+      truncatedPrefixBytes: 0,
+      entriesTruncated: false,
+      entriesDropped: 0,
+    }),
+  })) as typeof fetch;
+
+  const container = document.createElement("div");
+  document.body.append(container);
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(createElement(LanguageProvider, null, createElement(Usage, { apiBase })));
+    });
+    const deadline = Date.now() + 1_000;
+    let card: Element | undefined;
+    while (!card) {
+      card = [...container.querySelectorAll(".stat")].find(element =>
+        element.querySelector(".muted")?.textContent === "Cache reads",
+      );
+      if (card) break;
+      if (Date.now() >= deadline) throw new Error("Cache reads card did not render");
+      await act(async () => {
+        await new Promise<void>(resolve => testWindow.setTimeout(resolve, 10));
+      });
+    }
+    assertCard(card!);
+  } finally {
+    await act(async () => { root.unmount(); });
+    container.remove();
+    globalThis.fetch = originalFetch;
+    clearClientResourceStoresForTests();
+    testWindow.close();
+    for (const key of globalKeys) {
+      Object.defineProperty(globalThis, key, { configurable: true, value: previous[key] });
+    }
+  }
+}
+
+test("Usage shows an em dash for a non-positive total input token count", async () => {
+  await withUsageCacheCard({ inputTokens: -1, cachedInputTokens: 1 }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toBe("1 (—)");
+  });
+});
+
+test("Usage shows an em dash for a non-finite total input token count", async () => {
+  await withUsageCacheCard({ inputTokens: Number.POSITIVE_INFINITY, cachedInputTokens: 1 }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toContain("(—)");
+  });
+});
+
+test("Usage shows an em dash for non-finite cache-read data", async () => {
+  await withUsageCacheCard({ inputTokens: 1_000, cachedInputTokens: 900, cacheReadInputTokens: Number.NaN }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toContain("(—)");
+  });
+});
+
+test("Usage renders the explicit cache-read count and hit percentage together", async () => {
+  await withUsageCacheCard(
+    { inputTokens: 1_000, cachedInputTokens: 900, cacheReadInputTokens: 250, cacheCreationInputTokens: 12 },
+    card => {
+      expect(card.querySelector(".stat-value")?.textContent).toBe("250 (25%)");
+      expect(card.textContent).toContain("cache writes: 12");
+    },
+  );
+});
+
+test("Usage falls back to legacy cachedInputTokens for the cache-hit percentage", async () => {
+  await withUsageCacheCard({ inputTokens: 1_000, cachedInputTokens: 990 }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toBe("990 (99%)");
+  });
+});
+
+test("Usage shows an em dash when total input tokens are zero", async () => {
+  await withUsageCacheCard({ inputTokens: 0, cachedInputTokens: 100, cacheReadInputTokens: 50 }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toBe("50 (—)");
+  });
+});
+
+test("Usage clamps cache-hit percentages to the 0–100% range", async () => {
+  await withUsageCacheCard({ inputTokens: 1_000, cachedInputTokens: -100, cacheReadInputTokens: 2_000 }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toBe("2000 (100%)");
+  });
+});
+
+test("Usage clamps negative cache-read percentages to 0%", async () => {
+  await withUsageCacheCard({ inputTokens: 1_000, cachedInputTokens: 900, cacheReadInputTokens: -1 }, card => {
+    expect(card.querySelector(".stat-value")?.textContent).toBe("-1 (0%)");
+  });
+});
+
 test("Usage renders every section in one scrollable column with a sticky strip", async () => {
   const page = await Bun.file(new URL("../src/pages/Usage.tsx", import.meta.url)).text();
   const app = await Bun.file(new URL("../src/App.tsx", import.meta.url)).text();
