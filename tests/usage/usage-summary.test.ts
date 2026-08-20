@@ -1092,6 +1092,126 @@ describe("summarizeUsage", () => {
     expect(sum.providers[0].shareRatio).toBeCloseTo(1);
   });
 
+  test("aggregates model output speed by output tokens and duration, not average rates", () => {
+    const sum = summarizeUsage([
+      entry({
+        ts: FIXED_NOW - 1,
+        usageStatus: "reported",
+        durationMs: 1_000,
+        usage: { inputTokens: 1, outputTokens: 100 },
+      }),
+      entry({
+        ts: FIXED_NOW - 2,
+        usageStatus: "reported",
+        durationMs: 3_000,
+        usage: { inputTokens: 1, outputTokens: 100 },
+      }),
+    ], "30d", FIXED_NOW);
+
+    expect(sum.models[0]).toMatchObject({ outputTokensPerSecond: 50 });
+    expect(sum.models[0].outputTokensPerSecondEstimated).toBeUndefined();
+  });
+
+  test("excludes unsupported usage from model output speed", () => {
+    const sum = summarizeUsage([
+      entry({
+        ts: FIXED_NOW - 1,
+        model: "supported-and-unsupported",
+        usageStatus: "reported",
+        durationMs: 1_000,
+        usage: { inputTokens: 1, outputTokens: 100 },
+      }),
+      entry({
+        ts: FIXED_NOW - 2,
+        model: "supported-and-unsupported",
+        usageStatus: "unsupported",
+        durationMs: 1_000,
+        usage: { inputTokens: 1, outputTokens: 300 },
+      }),
+      entry({
+        ts: FIXED_NOW - 3,
+        model: "unsupported-only",
+        usageStatus: "unsupported",
+        durationMs: 1_000,
+        usage: { inputTokens: 1, outputTokens: 200 },
+      }),
+    ], "30d", FIXED_NOW);
+
+    const supportedModel = sum.models.find(model => model.model === "supported-and-unsupported");
+    expect(supportedModel).toMatchObject({ outputTokens: 400, outputTokensPerSecond: 100 });
+    expect(supportedModel?.outputTokensPerSecondEstimated).toBeUndefined();
+
+    const unsupportedOnlyModel = sum.models.find(model => model.model === "unsupported-only");
+    expect(unsupportedOnlyModel).toMatchObject({ outputTokens: 200 });
+    expect("outputTokensPerSecond" in unsupportedOnlyModel!).toBe(false);
+    expect("outputTokensPerSecondEstimated" in unsupportedOnlyModel!).toBe(false);
+  });
+
+  test("uses physical attempt durations for combo/retry model speed", () => {
+    const sum = summarizeUsage([entry({
+      ts: FIXED_NOW - 1,
+      requestId: "combo-speed",
+      provider: "combo",
+      model: "combo/free",
+      attempts: [
+        {
+          ordinal: 1,
+          provider: "openai",
+          model: "gpt-5.5",
+          adapter: "openai-chat",
+          status: 503,
+          durationMs: 1_000,
+          sendCount: 1,
+          recoveryKinds: [],
+          usageStatus: "reported",
+          usage: { inputTokens: 1, outputTokens: 100 },
+        },
+        {
+          ordinal: 2,
+          provider: "openai",
+          model: "gpt-5.5",
+          adapter: "openai-chat",
+          status: 200,
+          durationMs: 3_000,
+          sendCount: 1,
+          recoveryKinds: [],
+          usageStatus: "reported",
+          usage: { inputTokens: 1, outputTokens: 100 },
+        },
+      ],
+    })], "30d", FIXED_NOW);
+
+    expect(sum.models.find(model => model.model === "gpt-5.5")).toMatchObject({
+      outputTokensPerSecond: 50,
+    });
+  });
+
+  test("omits output speed fields when output or duration samples are invalid", () => {
+    const model = summarizeUsage([
+      entry({ ts: FIXED_NOW - 1, durationMs: 0, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: 100 } }),
+      entry({ ts: FIXED_NOW - 2, durationMs: 1_000, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: 0 } }),
+      entry({ ts: FIXED_NOW - 3, durationMs: -1, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: 100 } }),
+      entry({ ts: FIXED_NOW - 4, durationMs: Number.NaN, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: 100 } }),
+      entry({ ts: FIXED_NOW - 5, durationMs: 1_000, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: -1 } }),
+    ], "30d", FIXED_NOW).models[0];
+
+    expect("outputTokensPerSecond" in model).toBe(false);
+    expect("outputTokensPerSecondEstimated" in model).toBe(false);
+  });
+
+  test("marks an aggregate speed estimated when any valid contributing sample is estimated", () => {
+    const model = summarizeUsage([
+      entry({ ts: FIXED_NOW - 1, durationMs: 1_000, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: 100 } }),
+      entry({ ts: FIXED_NOW - 2, durationMs: 1_000, usageStatus: "estimated", usage: { inputTokens: 1, outputTokens: 100 } }),
+      entry({ ts: FIXED_NOW - 3, durationMs: 1_000, usageStatus: "reported", usage: { inputTokens: 1, outputTokens: 100, estimated: true } }),
+    ], "30d", FIXED_NOW).models[0];
+
+    expect(model).toMatchObject({
+      outputTokensPerSecond: 100,
+      outputTokensPerSecondEstimated: true,
+    });
+  });
+
   test("merges OpenAI passthrough and ChatGPT main/pool usage into one provider/model row", () => {
     const entries: PersistedUsageEntry[] = [
       entry({ ts: FIXED_NOW - 1, provider: "openai", model: "gpt-5.5", usageStatus: "reported", usage: { inputTokens: 4, outputTokens: 1 }, totalTokens: 5 }),
@@ -1425,6 +1545,7 @@ describe("summarizeUsage", () => {
       requestId: index >= 255 ? "shared-overflow-request" : `request-${index}`,
       provider: `provider-${index}`,
       model: `model-${index}`,
+      durationMs: index >= 255 ? (index - 254) * 1_000 : 10,
       usageStatus: "reported",
       usage: { inputTokens: 1, outputTokens: 1, ...(index >= 255 ? { cacheReadInputTokens: 1 } : {}) },
       totalTokens: 2,
@@ -1443,6 +1564,7 @@ describe("summarizeUsage", () => {
       outputTokens: 5,
       cacheReadInputTokens: 5,
       totalTokens: 10,
+      outputTokensPerSecond: 1 / 3,
     });
     expect(sum.days.find(day => day.requests > 0)?.models.at(-1)).toMatchObject({
       provider: "other",

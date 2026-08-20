@@ -3,7 +3,7 @@ import { canonicalAntigravityUsageModel } from "../providers/antigravity-models"
 import { usageDisplayTotalTokens } from "./totals";
 import { isUnresolvedRequestedModel, usageModelPriceOptions } from "./model-identity";
 import { isCodexUsageAccountLogLabel, type PersistedUsageEntry, type UsageStatus } from "./log";
-import { type AttemptCostEstimate, type CostEstimate, estimateAttemptCost, estimateRequestCost, serviceTierContext, type ServiceTierContext } from "./cost";
+import { type AttemptCostEstimate, type CostEstimate, estimateAttemptCost, estimateRequestCost, serviceTierContext, type ServiceTierContext, tokensPerSecond } from "./cost";
 
 /**
  * Canonical range members. The warm-up loop in the management usage route
@@ -87,6 +87,8 @@ export interface UsageModel {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  outputTokensPerSecond?: number;
+  outputTokensPerSecondEstimated?: boolean;
   cachedInputTokens?: number;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
@@ -337,6 +339,7 @@ interface UsageAttribution {
   usageStatus: UsageStatus;
   usage?: PersistedUsageEntry["usage"];
   totalTokens?: number;
+  durationMs: number;
 }
 
 
@@ -380,6 +383,7 @@ function usageAttributions(entry: PersistedUsageEntry): UsageAttribution[] {
       usageStatus: entry.usageStatus,
       ...(entry.usage ? { usage: entry.usage } : {}),
       ...(entry.totalTokens !== undefined ? { totalTokens: entry.totalTokens } : {}),
+      durationMs: entry.durationMs,
     }];
   }
   return entry.attempts.map(attempt => ({
@@ -391,6 +395,7 @@ function usageAttributions(entry: PersistedUsageEntry): UsageAttribution[] {
     usageStatus: attempt.usageStatus,
     ...(attempt.usage ? { usage: attempt.usage } : {}),
     ...(attempt.totalTokens !== undefined ? { totalTokens: attempt.totalTokens } : {}),
+    durationMs: attempt.durationMs,
   }));
 }
 
@@ -535,6 +540,9 @@ interface UsageModelAccumulator {
   summaryTotalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  speedOutputTokens: number;
+  speedDurationMs: number;
+  speedEstimated: boolean;
   cacheReadInputTokens: number;
   cacheCreationInputTokens: number;
   cacheObserved: boolean;
@@ -699,6 +707,9 @@ function blankModelAccumulator(
     summaryTotalTokens: 0,
     inputTokens: 0,
     outputTokens: 0,
+    speedOutputTokens: 0,
+    speedDurationMs: 0,
+    speedEstimated: false,
     cacheReadInputTokens: 0,
     cacheCreationInputTokens: 0,
     cacheObserved: false,
@@ -726,6 +737,9 @@ function mergeModelAccumulator(target: UsageModelAccumulator, source: UsageModel
   target.summaryTotalTokens += source.summaryTotalTokens;
   target.inputTokens += source.inputTokens;
   target.outputTokens += source.outputTokens;
+  target.speedOutputTokens += source.speedOutputTokens;
+  target.speedDurationMs += source.speedDurationMs;
+  target.speedEstimated ||= source.speedEstimated;
   target.cacheReadInputTokens += source.cacheReadInputTokens;
   target.cacheCreationInputTokens += source.cacheCreationInputTokens;
   target.cacheObserved ||= source.cacheObserved;
@@ -911,6 +925,7 @@ function buildUsageModels(
   return retainedModelAccumulators(sorted, overlaps).map(model => {
     const counts = requestCountsFor(model);
     const requests = counts.requests;
+    const outputTokensPerSecond = tokensPerSecond(model.speedOutputTokens, model.speedDurationMs);
     return {
       provider: model.provider,
       model: model.model,
@@ -924,6 +939,10 @@ function buildUsageModels(
       totalTokens: model.summaryTotalTokens,
       inputTokens: model.inputTokens,
       outputTokens: model.outputTokens,
+      ...(outputTokensPerSecond !== null ? { outputTokensPerSecond } : {}),
+      ...(outputTokensPerSecond !== null && model.speedEstimated
+        ? { outputTokensPerSecondEstimated: true }
+        : {}),
       cachedInputTokens: model.cacheReadInputTokens,
       cacheReadInputTokens: model.cacheReadInputTokens,
       cacheCreationInputTokens: model.cacheCreationInputTokens,
@@ -1135,6 +1154,15 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
     if (attribution.usage) {
       breakdown.inputTokens += attribution.usage.inputTokens;
       breakdown.outputTokens += attribution.usage.outputTokens;
+      if (
+        attribution.usageStatus !== "unsupported"
+        && tokensPerSecond(attribution.usage.outputTokens, attribution.durationMs) !== null
+      ) {
+        breakdown.speedOutputTokens += attribution.usage.outputTokens;
+        breakdown.speedDurationMs += attribution.durationMs;
+        breakdown.speedEstimated ||= attribution.usageStatus === "estimated"
+          || attribution.usage.estimated === true;
+      }
       const { read, creation, hasCacheTelemetry } = cacheTokensFromUsage(attribution.usage);
       breakdown.cacheObserved ||= hasCacheTelemetry;
       if (typeof read === "number") breakdown.cacheReadInputTokens += read;
