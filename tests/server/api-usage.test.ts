@@ -532,6 +532,49 @@ describe("GET /api/usage", () => {
     }
   });
 
+  test("range=today returns only entries from the current local day", async () => {
+    const now = Date.now();
+    const todayMidnight = new Date(now);
+    todayMidnight.setHours(0, 0, 0, 0);
+    const lines = [
+      JSON.stringify({
+        requestId: "ocx-yesterday",
+        timestamp: todayMidnight.getTime() - 1,
+        provider: "openai",
+        model: "gpt-5.5",
+        status: 200,
+        durationMs: 10,
+        usageStatus: "reported",
+        usage: { inputTokens: 100, outputTokens: 50 },
+        totalTokens: 150,
+      }),
+      JSON.stringify({
+        requestId: "ocx-today",
+        timestamp: todayMidnight.getTime() + 1,
+        provider: "openai",
+        model: "gpt-5.5",
+        status: 200,
+        durationMs: 10,
+        usageStatus: "reported",
+        usage: { inputTokens: 10, outputTokens: 5 },
+        totalTokens: 15,
+      }),
+    ];
+    writeFileSync(join(testDir, "usage.jsonl"), `${lines.join("\n")}\n`, { mode: 0o600 });
+    const nowSpy = spyOn(Date, "now").mockReturnValue(now);
+    const server = startServer(0);
+    try {
+      const res = await fetch(new URL("/api/usage?range=today", server.url));
+      const body = await res.json();
+      expect(body.range).toBe("today");
+      expect(body.summary).toMatchObject({ requests: 1, totalTokens: 15 });
+      expect(body.days).toHaveLength(1);
+    } finally {
+      await server.stop(true);
+      nowSpy.mockRestore();
+    }
+  });
+
   test("default range is 30d and includes the older entry", async () => {
     writeFixture(Date.now());
     const server = startServer(0);
