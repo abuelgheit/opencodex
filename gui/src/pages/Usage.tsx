@@ -71,6 +71,8 @@ interface UsageModel {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens?: number;
+  outputTokensPerSecond?: number;
+  outputTokensPerSecondEstimated?: boolean;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheHitRate?: number | null;
@@ -261,6 +263,16 @@ function cacheHitRateTitle(model: UsageModel, locale: Locale, t: TFn): string | 
     measured: formatTokens(observed, locale),
     total: formatTokens(model.inputTokens, locale),
   });
+}
+
+function formatModelTokPerSecond(value: unknown, estimated: boolean | undefined, localeTag?: string): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "—";
+  const digits = value >= 100 ? 0 : 1;
+  const formatted = new Intl.NumberFormat(localeTag, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+  return `${estimated === true ? "~" : ""}${formatted}`;
 }
 
 function cacheHitPercentage(summary: Pick<UsageSummaryTotals, "inputTokens" | "cachedInputTokens" | "cacheReadInputTokens">): string {
@@ -841,6 +853,7 @@ function UsageModelsTable({
             <th className="num">{t("usage.col.measured")}</th>
             <th className="num">{t("usage.col.inputTokens")}</th>
             <th className="num">{t("usage.col.outputTokens")}</th>
+            <th className="num" title={t("logs.metric.tokPerSecTitle")}>{t("logs.col.tokPerSec")}</th>
             <th className="num">{t("usage.col.cacheHits")}</th>
             <th className="num">{t("usage.col.cacheWrites")}</th>
             <th className="num">{t("usage.col.cacheHitRate")}</th>
@@ -862,6 +875,7 @@ function UsageModelsTable({
                 <td className="num">{model.measuredRequests}</td>
                 <td className="num mono">{formatTokens(model.inputTokens, locale)}</td>
                 <td className="num mono">{formatTokens(model.outputTokens, locale)}</td>
+                <td className="num mono">{formatModelTokPerSecond(model.outputTokensPerSecond, model.outputTokensPerSecondEstimated, locale)}</td>
                 <td className="num mono">{formatOptionalTokens(model.cacheReadInputTokens ?? model.cachedInputTokens, locale, unavailable)}</td>
                 <td className="num mono">{formatOptionalTokens(model.cacheCreationInputTokens, locale, unavailable)}</td>
                 {/*
