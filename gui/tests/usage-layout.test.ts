@@ -384,6 +384,8 @@ test("Usage defaults to Today and requests that range", async () => {
 
 test("Usage renders Today as hourly bars and keeps the seven-day chart", async () => {
   const src = await Bun.file(new URL("../src/pages/Usage.tsx", import.meta.url)).text();
+  expect(src).toContain("const USAGE_REFRESH_MS = 5_000");
+  expect(src).toContain("pollMs: USAGE_REFRESH_MS");
   expect(src).toContain("const todayHours = useMemo");
   expect(src).toContain('{range === "today" ? (');
   expect(src).toContain("<UsageActivityBars bars={todayHours}");
