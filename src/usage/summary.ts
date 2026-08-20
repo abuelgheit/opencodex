@@ -2,7 +2,7 @@ import { baseProviderLabel } from "../providers/label";
 import { canonicalAntigravityUsageModel } from "../providers/antigravity-models";
 import { usageDisplayTotalTokens } from "./totals";
 import { isCodexUsageAccountLogLabel, type PersistedUsageEntry, type UsageStatus } from "./log";
-import { estimateAttemptCost, estimateComboCost, estimateRequestCost, serviceTierContext } from "./cost";
+import { estimateAttemptCost, estimateComboCost, estimateRequestCost, serviceTierContext, tokensPerSecond } from "./cost";
 
 export type UsageRange = "7d" | "30d" | "all";
 export type UsageSurface = "all" | "codex" | "claude" | "grok";
@@ -63,6 +63,8 @@ export interface UsageModel {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  outputTokensPerSecond?: number;
+  outputTokensPerSecondEstimated?: boolean;
   cacheReadInputTokens: number;
   shareRatio: number;
   estimatedCostUsd?: number;
@@ -208,6 +210,39 @@ interface UsageAttribution {
   usageStatus: UsageStatus;
   usage?: PersistedUsageEntry["usage"];
   totalTokens?: number;
+  durationMs: number;
+}
+
+interface SpeedAccumulator {
+  outputTokens: number;
+  durationMs: number;
+  estimated: boolean;
+}
+
+function addSpeedSample(
+  speeds: Map<string, SpeedAccumulator>,
+  key: string,
+  outputTokens: number,
+  durationMs: number,
+  estimated: boolean,
+): void {
+  // Validate through the shared helper so summary rates use the same semantics
+  // as the rest of the usage subsystem.
+  const sampleRate = tokensPerSecond(outputTokens, durationMs);
+  if (sampleRate === null || !Number.isFinite(sampleRate) || sampleRate <= 0) return;
+  const current = speeds.get(key) ?? { outputTokens: 0, durationMs: 0, estimated: false };
+  current.outputTokens += outputTokens;
+  current.durationMs += durationMs;
+  current.estimated ||= estimated;
+  speeds.set(key, current);
+}
+
+function applySpeed(model: UsageModel, speed: SpeedAccumulator | undefined): void {
+  if (!speed) return;
+  const outputTokensPerSecond = tokensPerSecond(speed.outputTokens, speed.durationMs);
+  if (outputTokensPerSecond === null || !Number.isFinite(outputTokensPerSecond) || outputTokensPerSecond <= 0) return;
+  model.outputTokensPerSecond = outputTokensPerSecond;
+  if (speed.estimated) model.outputTokensPerSecondEstimated = true;
 }
 
 type CacheReadUsage = Pick<NonNullable<PersistedUsageEntry["usage"]>, "cacheReadInputTokens" | "cachedInputTokens" | "cacheCreationInputTokens">;
@@ -270,6 +305,7 @@ function usageAttributions(entry: PersistedUsageEntry): UsageAttribution[] {
       usageStatus: entry.usageStatus,
       ...(entry.usage ? { usage: entry.usage } : {}),
       ...(entry.totalTokens !== undefined ? { totalTokens: entry.totalTokens } : {}),
+      durationMs: entry.durationMs,
     }];
   }
   return entry.attempts.map(attempt => ({
@@ -279,6 +315,7 @@ function usageAttributions(entry: PersistedUsageEntry): UsageAttribution[] {
     usageStatus: attempt.usageStatus,
     ...(attempt.usage ? { usage: attempt.usage } : {}),
     ...(attempt.totalTokens !== undefined ? { totalTokens: attempt.totalTokens } : {}),
+    durationMs: attempt.durationMs,
   }));
 }
 
@@ -415,6 +452,7 @@ function buildDayGrid(range: UsageRange, since: number | null, now: number, entr
 function buildModels(entries: PersistedUsageEntry[], totalTokens: number): UsageModel[] {
   const byKey = new Map<string, UsageModel>();
   const statusesByKey = new Map<string, Map<string, UsageStatus[]>>();
+  const speedsByKey = new Map<string, SpeedAccumulator>();
   for (const entry of entries) {
     for (const attribution of usageAttributions(entry)) {
       const providerKey = baseProviderLabel(attribution.provider);
@@ -450,6 +488,15 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
         model.outputTokens += attribution.usage.outputTokens;
         model.cacheReadInputTokens += normalizedCacheReadInputTokens(attribution.usage);
         model.totalTokens += usageDisplayTotalTokens(attribution.usage, attribution.totalTokens) ?? 0;
+        if (attribution.usageStatus !== "unsupported") {
+          addSpeedSample(
+            speedsByKey,
+            key,
+            attribution.usage.outputTokens,
+            attribution.durationMs,
+            attribution.usageStatus === "estimated" || attribution.usage.estimated === true,
+          );
+        }
       }
     }
   }
@@ -462,6 +509,7 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
       if (status === "reported") model.reportedRequests += 1;
       else if (status === "estimated") model.estimatedRequests += 1;
     }
+    applySpeed(model, speedsByKey.get(key));
   }
   // Accumulate per-model estimated cost
   for (const entry of entries) {
@@ -506,12 +554,19 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
       cacheReadInputTokens: 0,
       shareRatio: 0,
     };
+    const otherSpeed: SpeedAccumulator = { outputTokens: 0, durationMs: 0, estimated: false };
     for (const model of overflow) {
       other.attemptCount += model.attemptCount;
       other.totalTokens += model.totalTokens;
       other.inputTokens += model.inputTokens;
       other.outputTokens += model.outputTokens;
       other.cacheReadInputTokens += model.cacheReadInputTokens;
+      const speed = speedsByKey.get(usageModelKey(model.provider, model.model));
+      if (speed) {
+        otherSpeed.outputTokens += speed.outputTokens;
+        otherSpeed.durationMs += speed.durationMs;
+        otherSpeed.estimated ||= speed.estimated;
+      }
       if (model.estimatedCostUsd !== undefined) {
         other.estimatedCostUsd = (other.estimatedCostUsd ?? 0) + model.estimatedCostUsd;
       }
@@ -530,6 +585,7 @@ function buildModels(entries: PersistedUsageEntry[], totalTokens: number): Usage
       else if (status === "estimated") other.estimatedRequests += 1;
     }
     other.shareRatio = totalTokens === 0 ? 0 : other.totalTokens / totalTokens;
+    applySpeed(other, otherSpeed);
     return other;
   });
 }

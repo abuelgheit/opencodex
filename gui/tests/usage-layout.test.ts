@@ -27,6 +27,8 @@ type UsageModelFixture = {
   model: string;
   inputTokens?: unknown;
   cacheReadInputTokens?: unknown;
+  outputTokensPerSecond?: unknown;
+  outputTokensPerSecondEstimated?: boolean;
   totalTokens?: number;
   shareRatio?: number;
 };
@@ -78,6 +80,8 @@ function usageFixture(providers: UsageProviderFixture[], models: UsageModelFixtu
       ...(model.inputTokens !== undefined ? { inputTokens: model.inputTokens } : {}),
       outputTokens: 1,
       ...(model.cacheReadInputTokens !== undefined ? { cacheReadInputTokens: model.cacheReadInputTokens } : {}),
+      ...(model.outputTokensPerSecond !== undefined ? { outputTokensPerSecond: model.outputTokensPerSecond } : {}),
+      ...(model.outputTokensPerSecondEstimated !== undefined ? { outputTokensPerSecondEstimated: model.outputTokensPerSecondEstimated } : {}),
       shareRatio: model.shareRatio ?? 1,
     })),
     historyTruncated: false,
@@ -370,17 +374,59 @@ test("Usage defaults to 7 days and requests that range", async () => {
   }
 });
 
-test("Usage model table renders cache-hit percentages and keeps quota loading independent", async () => {
+test("Usage model table renders speed and cache-hit columns while quota loading stays independent", async () => {
   await withRenderedUsage({
     providers: [{ provider: "openai" }],
     quotas: [],
-    models: [{ provider: "openai", model: "gpt-5.5", inputTokens: 100, cacheReadInputTokens: 25 }],
+    models: [{
+      provider: "openai",
+      model: "gpt-5.5",
+      inputTokens: 100,
+      cacheReadInputTokens: 25,
+      outputTokensPerSecond: 42.5,
+    }],
     assertRendered: container => {
       const table = container.querySelector("#usage-models-title")?.parentElement?.querySelector("table");
       const headers = [...(table?.querySelectorAll("thead th") ?? [])].map(th => th.textContent);
-      expect(headers).toEqual(["Model", "Provider", "Requests", "Measured", "Tokens", "Cache hit", "Share"]);
-      expect(table?.querySelector("tbody tr")?.querySelectorAll("td")[5]?.textContent).toBe("25%");
+      expect(headers).toEqual(["Model", "Provider", "Requests", "Measured", "Tokens", "tok/s", "Cache hit", "Share"]);
+      const cells = table?.querySelector("tbody tr")?.querySelectorAll("td");
+      expect(cells?.[5]?.textContent).toBe("42.5");
+      expect(cells?.[5]?.getAttribute("title")).toBeNull();
+      expect(cells?.[6]?.textContent).toBe("25%");
+      expect(cells?.[7]?.querySelector(".usage-bar")).not.toBeNull();
+      expect(table?.querySelector("thead th:nth-child(6)")?.getAttribute("title")).toBe("Output tokens per second over the full request duration");
       expect(container.querySelector("#usage-providers-title")).not.toBeNull();
+    },
+  });
+});
+
+test("Usage formats estimated and invalid model speeds without disturbing cache-hit or Share cells", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "openai" }],
+    quotas: [],
+    models: [
+      { provider: "a", model: "estimated", inputTokens: 100, cacheReadInputTokens: 25, outputTokensPerSecond: 100, outputTokensPerSecondEstimated: true },
+      { provider: "b", model: "missing", inputTokens: 100, cacheReadInputTokens: 50 },
+      { provider: "c", model: "nonfinite", inputTokens: 100, cacheReadInputTokens: 75, outputTokensPerSecond: Number.NaN },
+      { provider: "d", model: "zero", inputTokens: 100, cacheReadInputTokens: 25, outputTokensPerSecond: 0 },
+      { provider: "e", model: "negative", inputTokens: 100, cacheReadInputTokens: 10, outputTokensPerSecond: -1 },
+    ],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-models-title")?.parentElement?.querySelector("table");
+      const rows = [...(table?.querySelectorAll("tbody tr") ?? [])];
+      const rowFor = (model: string) => rows.find(row => row.querySelector("td")?.textContent === model)!;
+      const speedFor = (model: string) => rowFor(model).querySelectorAll("td")[5]?.textContent;
+
+      expect(speedFor("estimated")).toBe("~100");
+      expect(speedFor("missing")).toBe("—");
+      expect(speedFor("nonfinite")).toBe("—");
+      expect(speedFor("zero")).toBe("—");
+      expect(speedFor("negative")).toBe("—");
+      for (const row of rows) {
+        const cells = row.querySelectorAll("td");
+        expect(cells[6]?.textContent).toMatch(/^\d+%$/);
+        expect(cells[7]?.querySelector(".usage-bar")).not.toBeNull();
+      }
     },
   });
 });
@@ -399,7 +445,7 @@ test("Usage model cache-hit percentages fail closed and clamp to 0–100%", asyn
     ],
     assertRendered: container => {
       const table = container.querySelector("#usage-models-title")?.parentElement?.querySelector("table");
-      const values = [...(table?.querySelectorAll("tbody tr") ?? [])].map(row => row.querySelectorAll("td")[5]?.textContent);
+      const values = [...(table?.querySelectorAll("tbody tr") ?? [])].map(row => row.querySelectorAll("td")[6]?.textContent);
       expect(values).toEqual(["—", "—", "—", "—", "0%", "100%"]);
     },
   });
