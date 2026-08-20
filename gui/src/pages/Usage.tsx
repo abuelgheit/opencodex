@@ -7,9 +7,11 @@ import { readSessionListCache, writeSessionListCache } from "../session-list-cac
 import { EmptyState, Notice } from "../ui";
 import { modelLabel } from "../model-display";
 import { useDataSurface } from "../data-surface";
+import { useKeyedClientResource } from "../client-resource";
 import { DataSurfaceSkeleton } from "../components/data-surface";
 import { SectionTabs } from "../components/section-tabs";
 import { sectionAnchorId } from "../section-anchors";
+import { formatResetFuture } from "../components/QuotaBars";
 
 type Range = "all" | "30d" | "7d";
 type UsageSurface = "all" | "codex" | "claude" | "grok";
@@ -94,6 +96,63 @@ interface UsageResponse {
   snapshotWindowStart?: number | null;
   snapshotWindowEnd?: number | null;
   error?: string;
+}
+
+interface WeeklyQuota {
+  weeklyPercent: number;
+  weeklyResetAt?: number;
+  updatedAt?: number;
+}
+
+function quotaProviderKey(provider: string): string {
+  // The Usage API exposes the built-in OpenAI row as `openai`, while quota probes
+  // may report its ChatGPT identities as `chatgpt` or `openai-multi`.
+  const lower = provider.trim().toLowerCase();
+  return lower === "chatgpt" || lower === "openai-multi" ? "openai" : lower;
+}
+
+function validResetTimestamp(value: unknown): value is number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return false;
+  const milliseconds = value < 10_000_000_000 ? value * 1000 : value;
+  return Number.isFinite(new Date(milliseconds).getTime());
+}
+
+function validFreshnessTimestamp(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function weeklyQuotaLookup(payload: unknown): Map<string, WeeklyQuota> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return new Map();
+  const reports = (payload as { reports?: unknown }).reports;
+  if (!Array.isArray(reports)) return new Map();
+
+  const lookup = new Map<string, WeeklyQuota>();
+  for (const report of reports) {
+    if (!report || typeof report !== "object" || Array.isArray(report)) continue;
+    const row = report as { provider?: unknown; quota?: unknown; updatedAt?: unknown };
+    if (typeof row.provider !== "string" || row.provider.trim() === "") continue;
+    if (!row.quota || typeof row.quota !== "object" || Array.isArray(row.quota)) continue;
+    const quota = row.quota as { weeklyPercent?: unknown; weeklyResetAt?: unknown };
+    if (typeof quota.weeklyPercent !== "number" || !Number.isFinite(quota.weeklyPercent)) continue;
+
+    const candidate: WeeklyQuota = {
+      weeklyPercent: Math.min(100, Math.max(0, quota.weeklyPercent)),
+      ...(validResetTimestamp(quota.weeklyResetAt)
+        ? { weeklyResetAt: quota.weeklyResetAt }
+        : {}),
+      ...(validFreshnessTimestamp(row.updatedAt)
+        ? { updatedAt: row.updatedAt }
+        : {}),
+    };
+    const key = quotaProviderKey(row.provider);
+    const current = lookup.get(key);
+    // Prefer the newest report; equal or unavailable timestamps keep the first row
+    // so duplicate canonical identities have a deterministic, non-combining tie-breaker.
+    if (!current || (candidate.updatedAt !== undefined && (current.updatedAt === undefined || candidate.updatedAt > current.updatedAt))) {
+      lookup.set(key, candidate);
+    }
+  }
+  return lookup;
 }
 
 function formatPct(ratio: number): string {
@@ -566,11 +625,13 @@ function UsageModelsTable({
 
 function UsageProvidersTable({
   providers,
+  weeklyQuotas,
   locale,
   t,
   workspace = false,
 }: {
   providers: UsageProvider[];
+  weeklyQuotas: ReadonlyMap<string, WeeklyQuota>;
   locale: Locale;
   t: TFn;
   workspace?: boolean;
@@ -586,19 +647,33 @@ function UsageProvidersTable({
             <th className="num">{t("usage.col.requests")}</th>
             <th className="num">{t("usage.col.measured")}</th>
             <th className="num">{t("usage.col.tokens")}</th>
+            <th>{t("quota.weeklyLimit")}</th>
             <th>{t("usage.col.share")}</th>
           </tr>
         </thead>
         <tbody>
-          {providers.map(provider => (
-            <tr key={provider.provider}>
-              <td className="mono">{formatProviderDisplayName(provider.provider, t)}</td>
-              <td className="num">{provider.requests}</td>
-              <td className="num">{provider.measuredRequests}</td>
-              <td className="num mono">{formatTokens(provider.totalTokens, locale)}</td>
-              <td><div className="usage-bar"><div className="usage-bar-fill" style={{ width: `${Math.round(provider.shareRatio * 100)}%` }} /></div></td>
-            </tr>
-          ))}
+          {providers.map(provider => {
+            const quota = weeklyQuotas.get(quotaProviderKey(provider.provider));
+            return (
+              <tr key={provider.provider}>
+                <td className="mono">{formatProviderDisplayName(provider.provider, t)}</td>
+                <td className="num">{provider.requests}</td>
+                <td className="num">{provider.measuredRequests}</td>
+                <td className="num mono">{formatTokens(provider.totalTokens, locale)}</td>
+                <td>
+                  {quota ? (
+                    <>
+                      <div>{t("quota.usedPercent", { pct: Math.round(quota.weeklyPercent) })}</div>
+                      {quota.weeklyResetAt !== undefined && (
+                        <div className="muted text-caption">{formatResetFuture(quota.weeklyResetAt, t, locale)}</div>
+                      )}
+                    </>
+                  ) : "—"}
+                </td>
+                <td><div className="usage-bar"><div className="usage-bar-fill" style={{ width: `${Math.round(provider.shareRatio * 100)}%` }} /></div></td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -673,6 +748,7 @@ function UsageWorkspaceBody({
   modelQuery,
   onModelQuery,
   sortedProviders,
+  weeklyQuotas,
   range,
   locale,
   t,
@@ -685,6 +761,7 @@ function UsageWorkspaceBody({
   modelQuery: string;
   onModelQuery: (query: string) => void;
   sortedProviders: UsageProvider[];
+  weeklyQuotas: ReadonlyMap<string, WeeklyQuota>;
   range: Range;
   locale: Locale;
   t: TFn;
@@ -715,7 +792,7 @@ function UsageWorkspaceBody({
       label: t("usage.section.providers"),
       meta: data ? `${data.providers.length}` : "—",
       body: data
-        ? <UsageProvidersTable providers={sortedProviders} locale={locale} t={t} workspace />
+        ? <UsageProvidersTable providers={sortedProviders} weeklyQuotas={weeklyQuotas} locale={locale} t={t} workspace />
         : null,
     },
     {
@@ -800,6 +877,17 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
   const { state } = resource;
   const data = state.data ?? cached ?? null;
 
+  const providerQuotaResource = useKeyedClientResource<unknown>(
+    `ocx.usage.provider-quotas.v1:${apiBase}`,
+    [apiBase],
+    async signal => {
+      const response = await fetch(`${apiBase}/api/provider-quotas`, { signal });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
+      return await response.json();
+    },
+  );
+  const weeklyQuotas = useMemo(() => weeklyQuotaLookup(providerQuotaResource.data), [providerQuotaResource.data]);
+
   const heatmap = useMemo(() => buildHeatmap(data?.days ?? []), [data?.days]);
   const weekBars = useMemo(() => lastSevenDays(data?.days ?? []), [data?.days]);
   const activeDays = useMemo(() => (data?.days ?? []).filter(d => d.requests > 0).length, [data?.days]);
@@ -883,6 +971,7 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
             modelQuery={modelQuery}
             onModelQuery={setModelQuery}
             sortedProviders={sortedProviders}
+            weeklyQuotas={weeklyQuotas}
             range={range}
             locale={locale}
             t={t}
