@@ -14,6 +14,131 @@ type UsageCacheSummary = {
 
 let usageCacheTestCase = 0;
 
+type UsageProviderFixture = {
+  provider: string;
+  requests?: number;
+  measuredRequests?: number;
+  totalTokens?: number;
+  shareRatio?: number;
+};
+
+type ProviderQuotaFixture = {
+  provider?: unknown;
+  updatedAt?: unknown;
+  quota?: unknown;
+};
+
+function usageFixture(providers: UsageProviderFixture[]) {
+  return {
+    range: "30d",
+    surface: "all",
+    since: null,
+    generatedAt: Date.now(),
+    summary: {
+      requests: providers.length,
+      measuredRequests: providers.length,
+      reportedRequests: providers.length,
+      unreportedRequests: 0,
+      unsupportedRequests: 0,
+      estimatedRequests: 0,
+      inputTokens: 100,
+      outputTokens: 10,
+      cachedInputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 110,
+      coverageRatio: 1,
+    },
+    days: [],
+    models: [],
+    providers: providers.map(provider => ({
+      provider: provider.provider,
+      requests: provider.requests ?? 1,
+      measuredRequests: provider.measuredRequests ?? 1,
+      reportedRequests: 1,
+      estimatedRequests: 0,
+      totalTokens: provider.totalTokens ?? 10,
+      shareRatio: provider.shareRatio ?? 1,
+    })),
+    historyTruncated: false,
+    truncatedPrefixBytes: 0,
+    entriesTruncated: false,
+    entriesDropped: 0,
+  };
+}
+
+async function withRenderedUsage({
+  providers,
+  quotas,
+  quotaOk = true,
+  assertRendered,
+}: {
+  providers: UsageProviderFixture[];
+  quotas: ProviderQuotaFixture[];
+  quotaOk?: boolean;
+  assertRendered: (container: HTMLElement) => void;
+}) {
+  const globalKeys = ["document", "window", "navigator", "localStorage", "ResizeObserver", "IS_REACT_ACT_ENVIRONMENT"] as const;
+  const previous = Object.fromEntries(globalKeys.map(key => [key, Reflect.get(globalThis, key)]));
+  const originalFetch = globalThis.fetch;
+  const testWindow = new Window({ url: "http://localhost/" });
+  const apiBase = `http://usage-layout-test-${++usageCacheTestCase}`;
+  const windowResizeObserver = Reflect.get(testWindow, "ResizeObserver");
+  const resizeObserver = typeof windowResizeObserver === "function"
+    ? windowResizeObserver
+    : class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      };
+  Object.defineProperties(globalThis, {
+    document: { configurable: true, value: testWindow.document },
+    window: { configurable: true, value: testWindow },
+    navigator: { configurable: true, value: testWindow.navigator },
+    localStorage: { configurable: true, value: testWindow.localStorage },
+    ResizeObserver: { configurable: true, value: resizeObserver },
+  });
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  clearClientResourceStoresForTests();
+  let quotaSettled = false;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/api/provider-quotas")) {
+      quotaSettled = true;
+      if (!quotaOk) return { ok: false, status: 503, statusText: "Unavailable", json: async () => ({}) };
+      return { ok: true, json: async () => ({ generatedAt: Date.now(), reports: quotas }) };
+    }
+    if (url.includes("/api/usage?")) return { ok: true, json: async () => usageFixture(providers) };
+    throw new Error(`Unexpected request: ${url}`);
+  }) as typeof fetch;
+
+  const container = document.createElement("div");
+  document.body.append(container);
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(createElement(LanguageProvider, null, createElement(Usage, { apiBase })));
+    });
+    const deadline = Date.now() + 1_000;
+    while (!container.querySelector("#usage-providers-title") || !quotaSettled) {
+      if (Date.now() >= deadline) throw new Error("Usage providers table did not render");
+      await act(async () => {
+        await new Promise<void>(resolve => testWindow.setTimeout(resolve, 10));
+      });
+    }
+    assertRendered(container);
+  } finally {
+    await act(async () => { root.unmount(); });
+    container.remove();
+    globalThis.fetch = originalFetch;
+    clearClientResourceStoresForTests();
+    testWindow.close();
+    for (const key of globalKeys) {
+      Object.defineProperty(globalThis, key, { configurable: true, value: previous[key] });
+    }
+  }
+}
+
 async function withUsageCacheCard(summary: UsageCacheSummary, assertCard: (card: Element) => void) {
   const globalKeys = ["document", "window", "navigator", "localStorage", "ResizeObserver", "IS_REACT_ACT_ENVIRONMENT"] as const;
   const previous = Object.fromEntries(globalKeys.map(key => [key, Reflect.get(globalThis, key)]));
@@ -37,9 +162,13 @@ async function withUsageCacheCard(summary: UsageCacheSummary, assertCard: (card:
   });
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   clearClientResourceStoresForTests();
-  globalThis.fetch = (async () => ({
-    ok: true,
-    json: async () => ({
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    if (String(input).endsWith("/api/provider-quotas")) {
+      return { ok: true, json: async () => ({ generatedAt: Date.now(), reports: [] }) };
+    }
+    return {
+      ok: true,
+      json: async () => ({
       range: "30d",
       surface: "all",
       since: null,
@@ -63,9 +192,10 @@ async function withUsageCacheCard(summary: UsageCacheSummary, assertCard: (card:
       historyTruncated: false,
       truncatedPrefixBytes: 0,
       entriesTruncated: false,
-      entriesDropped: 0,
-    }),
-  })) as typeof fetch;
+        entriesDropped: 0,
+      }),
+    };
+  }) as typeof fetch;
 
   const container = document.createElement("div");
   document.body.append(container);
@@ -149,6 +279,152 @@ test("Usage clamps cache-hit percentages to the 0–100% range", async () => {
 test("Usage clamps negative cache-read percentages to 0%", async () => {
   await withUsageCacheCard({ inputTokens: 1_000, cachedInputTokens: 900, cacheReadInputTokens: -1 }, card => {
     expect(card.querySelector(".stat-value")?.textContent).toBe("-1 (0%)");
+  });
+});
+
+test("Usage places Weekly limit immediately before Share and renders provider quota percent", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }],
+    quotas: [{ provider: "anthropic", quota: { weeklyPercent: 24.6 } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      const headers = [...(table?.querySelectorAll("thead th") ?? [])].map(th => th.textContent);
+      expect(headers).toEqual(["Provider", "Requests", "Measured", "Tokens", "Weekly limit", "Share"]);
+      expect(table?.textContent).toContain("25% used");
+    },
+  });
+});
+
+test("Usage renders valid provider quota reset copy", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }],
+    quotas: [{ provider: "anthropic", quota: { weeklyPercent: 25, weeklyResetAt: Date.now() + 3_600_000 } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("Resets");
+    },
+  });
+});
+
+test("Usage omits reset copy for zero or negative provider reset timestamps", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }],
+    quotas: [{ provider: "anthropic", quota: { weeklyPercent: 25, weeklyResetAt: 0 } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("25% used");
+      expect(table?.textContent).not.toContain("Resets");
+    },
+  });
+
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }],
+    quotas: [{ provider: "anthropic", quota: { weeklyPercent: 25, weeklyResetAt: -1 } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("25% used");
+      expect(table?.textContent).not.toContain("Resets");
+    },
+  });
+});
+
+test("Usage fails closed for missing or malformed weekly provider quota data", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }, { provider: "deepseek" }],
+    quotas: [
+      { provider: "anthropic", quota: {} },
+      { provider: "deepseek", quota: { weeklyPercent: Number.NaN } },
+    ],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      const rows = [...(table?.querySelectorAll("tbody tr") ?? [])];
+      const weeklyCellFor = (providerName: string) => rows
+        .find(row => row.querySelector("td")?.textContent === providerName)
+        ?.querySelectorAll("td")[4]?.textContent;
+      expect(weeklyCellFor("Anthropic Claude")).toBe("—");
+      expect(weeklyCellFor("DeepSeek")).toBe("—");
+      expect(table?.textContent).not.toContain("NaN% used");
+    },
+  });
+});
+
+test("Usage fails closed for a non-finite provider weekly percentage", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "low" }],
+    quotas: [{ provider: "low", quota: { weeklyPercent: Number.POSITIVE_INFINITY } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.querySelector("tbody tr")?.querySelectorAll("td")[4]?.textContent).toBe("—");
+    },
+  });
+});
+
+test("Usage clamps provider weekly quota percentages to 0% and 100%", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "low" }, { provider: "high" }],
+    quotas: [
+      { provider: "low", quota: { weeklyPercent: -10 } },
+      { provider: "high", quota: { weeklyPercent: 120 } },
+    ],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("0% used");
+      expect(table?.textContent).toContain("100% used");
+    },
+  });
+});
+
+test("Usage keeps the provider usage table when the quota request fails", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }],
+    quotas: [],
+    quotaOk: false,
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("Anthropic Claude");
+      expect(table?.textContent).toContain("—");
+    },
+  });
+});
+
+test("Usage maps ChatGPT quota identities onto the OpenAI usage row", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "openai" }],
+    quotas: [{ provider: "chatgpt", quota: { weeklyPercent: 61 } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("61% used");
+    },
+  });
+});
+
+test("Usage matches mixed-case quota provider identities case-insensitively", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "anthropic" }],
+    quotas: [{ provider: "AnThRoPiC", quota: { weeklyPercent: 37 } }],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("37% used");
+    },
+  });
+});
+
+test("Usage chooses the newest duplicate canonical provider quota report", async () => {
+  await withRenderedUsage({
+    providers: [{ provider: "openai" }],
+    quotas: [
+      { provider: "openai-multi", updatedAt: -1, quota: { weeklyPercent: 12 } },
+      { provider: "chatgpt", updatedAt: 200, quota: { weeklyPercent: 88 } },
+      { provider: "OPENAI-MULTI", updatedAt: Number.POSITIVE_INFINITY, quota: { weeklyPercent: 99 } },
+      { provider: "CHATGPT", updatedAt: Number.NaN, quota: { weeklyPercent: 77 } },
+    ],
+    assertRendered: container => {
+      const table = container.querySelector("#usage-providers-title")?.parentElement?.querySelector("table");
+      expect(table?.textContent).toContain("88% used");
+      expect(table?.textContent).not.toContain("12% used");
+      expect(table?.textContent).not.toContain("99% used");
+      expect(table?.textContent).not.toContain("77% used");
+    },
   });
 });
 
