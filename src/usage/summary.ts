@@ -188,15 +188,17 @@ export function cacheTokensFromUsage(usage?: PersistedUsageEntry["usage"]): {
   hasCacheTelemetry: boolean;
 } {
   if (!usage) return { read: undefined, creation: undefined, hasCacheTelemetry: false };
-  const creation = usage.cacheCreationInputTokens;
-  const read = typeof usage.cacheReadInputTokens === "number"
-    ? usage.cacheReadInputTokens
-    : typeof usage.cachedInputTokens === "number" && typeof creation === "number"
-      ? Math.max(0, usage.cachedInputTokens - creation)
-      : usage.cachedInputTokens;
-  const hasCacheTelemetry = typeof usage.cachedInputTokens === "number"
-    || typeof usage.cacheReadInputTokens === "number"
-    || typeof usage.cacheCreationInputTokens === "number";
+  const finiteTokenCount = (value: unknown): number | undefined =>
+    typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  const explicitRead = finiteTokenCount(usage.cacheReadInputTokens);
+  const cached = finiteTokenCount(usage.cachedInputTokens);
+  const creation = finiteTokenCount(usage.cacheCreationInputTokens);
+  const read = explicitRead !== undefined
+    ? explicitRead
+    : cached !== undefined && creation !== undefined
+      ? Math.max(0, cached - creation)
+      : cached;
+  const hasCacheTelemetry = explicitRead !== undefined || cached !== undefined || creation !== undefined;
   return { read, creation, hasCacheTelemetry };
 }
 
