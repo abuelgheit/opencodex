@@ -1178,6 +1178,7 @@ export const en = {
   "usage.col.cacheHits": "Cache hits",
   "usage.col.cacheWrites": "Cache writes",
   "usage.col.cacheHitRate": "Hit rate",
+  "usage.col.cacheHit": "Cache hit",
   "usage.cacheHitRate.partial": "Averaged over {measured} of {total} input tokens; the remaining requests reported no cache detail.",
   "usage.cacheHitRate.unmeasured": "No request for this row reported cache detail, so there is no hit rate to average.",
   "usage.unavailable": "—",

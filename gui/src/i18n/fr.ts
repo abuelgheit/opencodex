@@ -1155,6 +1155,7 @@ export const fr: Record<TKey, string> = {
   "usage.col.cacheHits": "Lectures du cache",
   "usage.col.cacheWrites": "Écritures dans le cache",
   "usage.col.cacheHitRate": "Taux de succès du cache",
+  "usage.col.cacheHit": "Hit de cache",
   "usage.cacheHitRate.partial": "Moyenne calculée sur {measured} des {total} jetons d’entrée ; les autres requêtes n’ont fourni aucun détail sur le cache.",
   "usage.cacheHitRate.unmeasured": "Aucune requête de cette ligne n’a fourni de détails sur le cache ; il n’y a donc pas de taux de succès moyen à calculer.",
   "usage.unavailable": "—",

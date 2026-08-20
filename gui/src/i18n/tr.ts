@@ -1165,6 +1165,7 @@ export const tr: Record<TKey, string> = {
   "usage.col.cacheHits": "Önbellek isabetleri",
   "usage.col.cacheWrites": "Önbellek yazma",
   "usage.col.cacheHitRate": "İsabet oranı",
+  "usage.col.cacheHit": "Önbellek isabeti",
   "usage.cacheHitRate.partial": "Toplam {total} girdi jetonunun {measured} kadarı üzerinden ortalama hesaplandı; kalan isteklerde önbellek ayrıntısı bildirilmedi.",
   "usage.cacheHitRate.unmeasured": "Bu satırdaki hiçbir istek önbellek ayrıntısı bildirmediği için hesaplanabilecek bir ortalama isabet oranı yok.",
   "usage.unavailable": "—",
