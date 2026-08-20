@@ -51,6 +51,17 @@ export interface UsageDayModel {
   totalTokens: number;
 }
 
+/** One local-clock hour in the current day, used by the dashboard's Today chart. */
+export interface UsageHour {
+  date: string;
+  hour: number;
+  requests: number;
+  measuredRequests: number;
+  reportedRequests: number;
+  totalTokens: number;
+  models: UsageDayModel[];
+}
+
 export interface UsageModel {
   provider: string;
   model: string;
@@ -111,6 +122,8 @@ export interface UsageSummary {
   generatedAt: number;
   summary: UsageSummaryTotals;
   days: UsageDay[];
+  /** Zero-filled local-hour buckets for `range=today`; empty for other ranges. */
+  hours: UsageHour[];
   models: UsageModel[];
   providers: UsageProvider[];
   accounts: UsageAccount[];
@@ -448,6 +461,67 @@ function buildDayGrid(range: UsageRange, since: number | null, now: number, entr
     }
   }
   return out;
+}
+
+function buildHourGrid(range: UsageRange, now: number, entries: PersistedUsageEntry[]): UsageHour[] {
+  if (range !== "today") return [];
+
+  const date = localDateKey(now);
+  const grid = new Map<number, UsageHour>();
+  const hourModels = new Map<number, Map<string, UsageDayModel>>();
+  const hourModelRequests = new Map<string, Set<string>>();
+  const bumpHourModel = (hour: number, attribution: UsageAttribution): void => {
+    let models = hourModels.get(hour);
+    if (!models) { models = new Map(); hourModels.set(hour, models); }
+    const providerKey = baseProviderLabel(attribution.provider);
+    const modelKey = usageModelKey(providerKey, attribution.model);
+    let model = models.get(modelKey);
+    if (!model) {
+      model = { model: attribution.model, provider: providerKey, requests: 0, attemptCount: 0, totalTokens: 0 };
+      models.set(modelKey, model);
+    }
+    const requestKey = `${hour}\0${modelKey}`;
+    let requests = hourModelRequests.get(requestKey);
+    if (!requests) { requests = new Set(); hourModelRequests.set(requestKey, requests); }
+    requests.add(attribution.requestId);
+    model.requests = requests.size;
+    model.attemptCount += 1;
+    model.totalTokens += usageDisplayTotalTokens(attribution.usage, attribution.totalTokens) ?? 0;
+  };
+
+  for (let hour = 0; hour < 24; hour++) {
+    grid.set(hour, { date, hour, requests: 0, measuredRequests: 0, reportedRequests: 0, totalTokens: 0, models: [] });
+  }
+  for (const entry of entries) {
+    if (localDateKey(entry.timestamp) !== date) continue;
+    const hour = new Date(entry.timestamp).getHours();
+    const bucket = grid.get(hour);
+    if (!bucket) continue;
+    bucket.requests += 1;
+    if (isMeasuredStatus(entry.usageStatus)) bucket.measuredRequests += 1;
+    if (entry.usageStatus === "reported") bucket.reportedRequests += 1;
+    bucket.totalTokens += usageDisplayTotalTokens(entry.usage, entry.totalTokens) ?? 0;
+    for (const attribution of usageAttributions(entry)) bumpHourModel(hour, attribution);
+  }
+
+  for (const [hour, bucket] of grid) {
+    const models = hourModels.get(hour);
+    if (!models) continue;
+    const sorted = [...models.values()].sort((a, b) => b.requests - a.requests);
+    bucket.models = retainedBreakdownRows(sorted, overflow => {
+      const requests = new Set<string>();
+      let attemptCount = 0;
+      let totalTokens = 0;
+      for (const model of overflow) {
+        attemptCount += model.attemptCount;
+        totalTokens += model.totalTokens;
+        const requestKey = `${hour}\0${usageModelKey(model.provider, model.model)}`;
+        for (const requestId of hourModelRequests.get(requestKey) ?? []) requests.add(requestId);
+      }
+      return { model: "other", provider: "other", requests: requests.size, attemptCount, totalTokens };
+    });
+  }
+  return [...grid.values()];
 }
 
 function buildModels(entries: PersistedUsageEntry[], totalTokens: number): UsageModel[] {
@@ -810,6 +884,7 @@ export function summarizeUsage(
     generatedAt: now,
     summary: totals,
     days: buildDayGrid(range, since, now, filteredEntries),
+    hours: buildHourGrid(range, now, filteredEntries),
     models: buildModels(filteredEntries, totals.totalTokens),
     providers: buildProviders(filteredEntries, totals.totalTokens),
     accounts: buildAccounts(filteredEntries),

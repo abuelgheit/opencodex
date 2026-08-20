@@ -55,10 +55,14 @@ describe("parseRange", () => {
     const eveningSummary = summarizeUsage(entries, "today", evening);
     expect(morningSummary.since).toBe(todayMidnight);
     expect(morningSummary.days).toHaveLength(1);
+    expect(morningSummary.hours).toHaveLength(24);
+    expect(morningSummary.hours.find(hour => hour.hour === new Date(todayMidnight + 3_600_000).getHours()))
+      .toMatchObject({ date: morningSummary.days[0]!.date, requests: 1, totalTokens: 22 });
     expect(morningSummary.summary).toMatchObject({ requests: 1, totalTokens: 22 });
     expect(eveningSummary.since).toBe(todayMidnight);
     expect(eveningSummary.days).toHaveLength(1);
     expect(eveningSummary.summary).toMatchObject({ requests: 1, totalTokens: 22 });
+    expect(summarizeUsage(entries, "7d", morning).hours).toEqual([]);
   });
 
   test("defaults to 30d on null or unknown", () => {

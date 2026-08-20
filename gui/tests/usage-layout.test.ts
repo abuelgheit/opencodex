@@ -382,11 +382,12 @@ test("Usage defaults to Today and requests that range", async () => {
   }
 });
 
-test("Usage renders Today as a one-day bar instead of the seven-day chart", async () => {
+test("Usage renders Today as hourly bars and keeps the seven-day chart", async () => {
   const src = await Bun.file(new URL("../src/pages/Usage.tsx", import.meta.url)).text();
-  expect(src).toContain("const todayBars = useMemo");
+  expect(src).toContain("const todayHours = useMemo");
   expect(src).toContain('{range === "today" ? (');
-  expect(src).toContain("<WeekDayBars weekBars={todayBars}");
+  expect(src).toContain("<UsageActivityBars bars={todayHours}");
+  expect(src).toContain('hourly />');
   expect(src).toContain(') : range === "7d" ? (');
   expect(src).toContain("<WeekDayBars weekBars={weekBars}");
 });

@@ -831,6 +831,7 @@ export const en = {
   "usage.card.coverage": "Coverage",
   "usage.card.activeDays": "Active days",
   "usage.section.heatmap": "Daily activity",
+  "usage.section.hourly": "Hourly activity",
   "usage.section.overview": "Overview",
   "usage.section.models": "Models",
   "usage.section.providers": "Providers",

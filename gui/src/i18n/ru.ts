@@ -815,6 +815,7 @@ export const ru: Record<TKey, string> = {
   "usage.card.coverage": "Покрытие",
   "usage.card.activeDays": "Активные дни",
   "usage.section.heatmap": "Активность по дням",
+  "usage.section.hourly": "Почасовая активность",
   "usage.section.overview": "Обзор",
   "usage.section.models": "Модели",
   "usage.section.providers": "Провайдеры",

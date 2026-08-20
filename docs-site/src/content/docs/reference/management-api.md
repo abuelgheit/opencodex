@@ -143,6 +143,10 @@ re-estimated from the pricing active when the summary is read. This is an API-eq
 not a subscription charge. New main-pool requests use the reserved `main` label; legacy bare
 `openai` rows remain in an ambiguous bucket instead of being reassigned from current configuration.
 
+For `range=today`, the response also includes `hours`: 24 zero-filled local-clock buckets for the
+current day. Each bucket carries the same request, token, and per-model breakdown fields as a daily
+row, so clients can render an hourly activity chart. Other ranges return `hours: []`.
+
 :::caution
 Storage cleanup endpoints can move or permanently remove archived session data. Always preview
 first and submit the returned digest. Prefer quarantine when recovery may be needed.
