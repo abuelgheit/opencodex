@@ -934,6 +934,7 @@ function UsageWorkspaceBody({
 
 /** Held usage payloads so provider/surface tab switches skip a cold ~5s refetch. */
 const usageMemoryCache = new Map<string, UsageResponse>();
+const USAGE_REFRESH_MS = 5_000;
 
 function usageCacheKey(apiBase: string, range: Range, surface: UsageSurface): string {
   return `ocx.usage.v1:${apiBase}:${range}:${surface}`;
@@ -972,7 +973,7 @@ export default function Usage({ apiBase }: { apiBase: string }) {
     resourceKey,
     [apiBase, range, surface],
     loadUsage,
-    { isEmpty: () => false, initialData: cached ?? undefined },
+    { isEmpty: () => false, initialData: cached ?? undefined, pollMs: USAGE_REFRESH_MS },
   );
   const { state } = resource;
   const data = state.data ?? cached ?? null;
@@ -985,6 +986,7 @@ export default function Usage({ apiBase }: { apiBase: string }) {
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
       return await response.json();
     },
+    { pollMs: USAGE_REFRESH_MS },
   );
   const weeklyQuotas = useMemo(() => weeklyQuotaLookup(providerQuotaResource.data), [providerQuotaResource.data]);
 
