@@ -846,6 +846,7 @@ export const zh: Record<TKey, string> = {
   "usage.card.coverage": "覆盖率",
   "usage.card.activeDays": "活跃天数",
   "usage.section.heatmap": "每日活动",
+  "usage.section.hourly": "每小时活动",
   "usage.section.overview": "概览",
   "usage.section.models": "模型",
   "usage.section.providers": "提供方",

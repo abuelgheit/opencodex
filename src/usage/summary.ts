@@ -73,6 +73,17 @@ export interface UsageDayModel {
   estimatedCostUsd?: number;
 }
 
+/** One local-clock hour in the current day, used by the dashboard's Today chart. */
+export interface UsageHour {
+  date: string;
+  hour: number;
+  requests: number;
+  measuredRequests: number;
+  reportedRequests: number;
+  totalTokens: number;
+  models: UsageDayModel[];
+}
+
 export interface UsageModel {
   provider: string;
   model: string;
@@ -150,6 +161,8 @@ export interface UsageSummary {
   generatedAt: number;
   summary: UsageSummaryTotals;
   days: UsageDay[];
+  /** Zero-filled local-hour buckets for `range=today`; empty for other ranges. */
+  hours: UsageHour[];
   models: UsageModel[];
   providers: UsageProvider[];
   accounts: UsageAccount[];
@@ -583,12 +596,19 @@ interface UsagePartition {
   providers?: Map<string, UsageModelAccumulator>;
   accounts: Map<string, UsageAccountAccumulator>;
   modelOverlaps: Map<string, UsageModelOverlap>;
+  hours: Map<number, UsageHourAccumulator>;
 }
 
 interface UsageDayAccumulator {
   totals: UsageSummaryTotals;
   models: Map<string, UsageModelAccumulator>;
   modelOverlaps: UsageModelOverlap[];
+}
+
+interface UsageHourAccumulator {
+  totals: UsageSummaryTotals;
+  models: Map<string, UsageModelAccumulator>;
+  modelOverlaps: Map<string, UsageModelOverlap>;
 }
 
 interface NormalizedUsageFilter {
@@ -759,6 +779,34 @@ function mergeModelMaps(
     if (current) mergeModelAccumulator(current, model);
     else target.set(key, cloneModelAccumulator(model));
   }
+}
+
+function cloneHourAccumulator(source: UsageHourAccumulator): UsageHourAccumulator {
+  return {
+    totals: { ...source.totals },
+    models: new Map(
+      [...source.models].map(([key, model]) => [key, cloneModelAccumulator(model)]),
+    ),
+    modelOverlaps: new Map(
+      [...source.modelOverlaps].map(([signature, overlap]) => [
+        signature,
+        { models: overlap.models.map(([key, facts]) => [key, facts] as const), count: overlap.count },
+      ]),
+    ),
+  };
+}
+
+function dayAccumulatorFromHour(source: UsageHourAccumulator): UsageDayAccumulator {
+  return {
+    totals: { ...source.totals },
+    models: new Map(
+      [...source.models].map(([key, model]) => [key, cloneModelAccumulator(model)]),
+    ),
+    modelOverlaps: [...source.modelOverlaps.values()].map(overlap => ({
+      models: overlap.models.map(([key, facts]) => [key, facts] as const),
+      count: overlap.count,
+    })),
+  };
 }
 
 function cloneAccountAccumulator(source: UsageAccountAccumulator): UsageAccountAccumulator {
@@ -1091,12 +1139,17 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
       for (const [label, account] of partition.accounts) {
         accounts.set(label, cloneAccountAccumulator(account));
       }
+      const hours = new Map<number, UsageHourAccumulator>();
+      for (const [hour, accumulator] of partition.hours) {
+        hours.set(hour, cloneHourAccumulator(accumulator));
+      }
       cloned.partitions.set(key, {
         ...partition,
         totals: { ...partition.totals },
         models,
         ...(providers ? { providers } : {}),
         accounts,
+        hours,
         modelOverlaps: new Map(
           [...partition.modelOverlaps].map(([signature, overlap]) => [signature, { ...overlap }]),
         ),
@@ -1132,6 +1185,7 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
         ...(this.mode === "row-unique" ? { providers: new Map() } : {}),
         accounts: new Map(),
         modelOverlaps: new Map(),
+        hours: new Map(),
       };
       this.partitions.set(key, partition);
       this.estimatedRetainedBytes += ESTIMATED_PARTITION_BYTES;
@@ -1316,10 +1370,22 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
     partition.totals.attemptCount += entry.attempts?.length ?? 1;
     addTokens(partition.totals, entry);
     addEstimatedCost(partition.totals, entry, costInfo);
+    const hourNumber = new Date(entry.timestamp).getHours();
+    let hour = partition.hours.get(hourNumber);
+    if (!hour) {
+      hour = { totals: blankTotals(), models: new Map(), modelOverlaps: new Map() };
+      partition.hours.set(hourNumber, hour);
+      this.estimatedRetainedBytes += ESTIMATED_PARTITION_BYTES;
+    }
+    bumpStatus(hour.totals, entry.usageStatus);
+    hour.totals.attemptCount += entry.attempts?.length ?? 1;
+    addTokens(hour.totals, entry);
+    addEstimatedCost(hour.totals, entry, costInfo);
 
     const requestKey = this.mode === "exact" ? this.requestKey(entry.requestId) : null;
     const attributions = usageAttributions(entry);
     const modelFacts = new Map<string, number>();
+    const hourModelFacts = new Map<string, number>();
     const providerFacts = new Map<string, number>();
     const accountLabels = new Set<string>();
     for (let index = 0; index < attributions.length; index++) {
@@ -1332,6 +1398,15 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
         | (estimate ? REQUEST_PRICED : REQUEST_UNPRICED);
       const modelKey = this.addModelAttribution(partition, attribution, estimate, ordinal);
       modelFacts.set(modelKey, (modelFacts.get(modelKey) ?? 0) | facts);
+      let hourModel = hour.models.get(modelKey);
+      if (!hourModel) {
+        const provider = baseProviderLabel(attribution.provider);
+        hourModel = blankModelAccumulator(provider, attribution.model, attribution.resolvedModel, ordinal, this.mode);
+        hour.models.set(modelKey, hourModel);
+        this.estimatedRetainedBytes += ESTIMATED_BREAKDOWN_BYTES + modelKey.length * 2;
+      }
+      this.addAttributionMetrics(hourModel, attribution, estimate);
+      hourModelFacts.set(modelKey, (hourModelFacts.get(modelKey) ?? 0) | facts);
       if (this.mode === "row-unique") {
         const providerKey = this.addProviderAttribution(partition, attribution, estimate, ordinal);
         providerFacts.set(providerKey, (providerFacts.get(providerKey) ?? 0) | facts);
@@ -1341,6 +1416,9 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
     }
     for (const [modelKey, facts] of modelFacts) {
       this.addBreakdownRequest(partition.models.get(modelKey)!, facts, requestKey);
+    }
+    for (const [modelKey, facts] of hourModelFacts) {
+      this.addBreakdownRequest(hour.models.get(modelKey)!, facts, requestKey);
     }
     if (partition.providers) {
       for (const [providerKey, facts] of providerFacts) {
@@ -1362,6 +1440,15 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
           + models.length * ESTIMATED_OVERLAP_MODEL_BYTES
           + signature.length * 2;
       }
+      const hourOverlap = hour.modelOverlaps.get(signature);
+      if (hourOverlap) {
+        hourOverlap.count += 1;
+      } else {
+        hour.modelOverlaps.set(signature, { models, count: 1 });
+        this.estimatedRetainedBytes += ESTIMATED_OVERLAP_BYTES
+          + models.length * ESTIMATED_OVERLAP_MODEL_BYTES
+          + signature.length * 2;
+      }
     }
   }
 
@@ -1376,6 +1463,7 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
     const providers = new Map<string, UsageModelAccumulator>();
     const accounts = new Map<string, UsageAccountAccumulator>();
     const dayAccumulators = new Map<string, UsageDayAccumulator>();
+    const hourAccumulators = new Map<number, UsageDayAccumulator>();
     const modelOverlaps: UsageModelOverlap[] = [];
     let oldestTimestamp: number | null = null;
 
@@ -1404,6 +1492,18 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
       mergeTotals(day.totals, partition.totals);
       mergeModelMaps(day.models, partition.models);
       day.modelOverlaps.push(...partition.modelOverlaps.values());
+      if (range === "today") {
+        for (const [hourNumber, sourceHour] of partition.hours) {
+          const currentHour = hourAccumulators.get(hourNumber);
+          if (currentHour) {
+            mergeTotals(currentHour.totals, sourceHour.totals);
+            mergeModelMaps(currentHour.models, sourceHour.models);
+            currentHour.modelOverlaps.push(...sourceHour.modelOverlaps.values());
+          } else {
+            hourAccumulators.set(hourNumber, dayAccumulatorFromHour(sourceHour));
+          }
+        }
+      }
     }
     finalizeCoverage(totals);
 
@@ -1437,6 +1537,22 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
         estimatedCostUsd: day.totals.estimatedCostUsd,
         models: buildDayModels(day.models, day.modelOverlaps),
       }));
+    const todayDate = localDateKey(now);
+    const hours: UsageHour[] = range === "today"
+      ? Array.from({ length: 24 }, (_, hourNumber) => {
+        const hour = hourAccumulators.get(hourNumber)
+          ?? { totals: blankTotals(), models: new Map(), modelOverlaps: [] };
+        return {
+          date: todayDate,
+          hour: hourNumber,
+          requests: hour.totals.requests,
+          measuredRequests: hour.totals.measuredRequests,
+          reportedRequests: hour.totals.reportedRequests,
+          totalTokens: hour.totals.totalTokens,
+          models: buildDayModels(hour.models, hour.modelOverlaps),
+        };
+      })
+      : [];
 
     const summary: UsageSummary = {
       range,
@@ -1445,6 +1561,7 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
       generatedAt: now,
       summary: totals,
       days,
+      hours,
       models: buildUsageModels(models, totals.totalTokens, modelOverlaps),
       providers: buildUsageProviders(this.mode === "row-unique" ? providers : models, totals.totalTokens),
       accounts: buildUsageAccounts(accounts),
@@ -1459,6 +1576,10 @@ class StreamingUsageSummaryAccumulator implements UsageSummaryAccumulator {
       days: summary.days.map(day => ({
         ...day,
         models: day.models.filter(row => matches(row.provider, row.model)),
+      })),
+      hours: summary.hours.map(hour => ({
+        ...hour,
+        models: hour.models.filter(row => matches(row.provider, row.model)),
       })),
       models: retainedModels,
       providers: summary.providers.filter(row => retainedProviders.has(row.provider)),
@@ -1538,6 +1659,7 @@ export function projectUsageSummary<T extends UsageSummary>(
     ...summary,
     summary: projected.summary,
     days: projected.days,
+    hours: projected.hours,
     models: projected.models,
     providers: projected.providers,
     accounts: projected.accounts,

@@ -859,6 +859,7 @@ export const tr: Record<TKey, string> = {
   "usage.card.coverage": "Kapsam",
   "usage.card.activeDays": "Aktif günler",
   "usage.section.heatmap": "Günlük aktivite",
+  "usage.section.hourly": "Saatlik aktivite",
   "usage.section.overview": "Genel bakış",
   "usage.section.models": "Modeller",
   "usage.section.providers": "Sağlayıcılar",

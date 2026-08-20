@@ -178,6 +178,10 @@ when the provider reported no cache telemetry or the row has no input tokens, be
 data" and "a genuine 0% hit rate" are different facts and a chart that renders them alike is
 misleading.
 
+For `range=today`, the response also includes `hours`: 24 zero-filled local-clock buckets for the
+current day. Each bucket carries the same request, token, and per-model breakdown fields as a daily
+row, so clients can render an hourly activity chart. Other ranges return `hours: []`.
+
 :::caution
 Storage cleanup endpoints can move or permanently remove archived session data. Always preview
 first and submit the returned digest. Prefer quarantine when recovery may be needed.

@@ -831,6 +831,7 @@ export const de: Record<TKey, string> = {
   "usage.card.coverage": "Abdeckung",
   "usage.card.activeDays": "Aktive Tage",
   "usage.section.heatmap": "Tägliche Aktivität",
+  "usage.section.hourly": "Stündliche Aktivität",
   "usage.section.overview": "Übersicht",
   "usage.section.models": "Modelle",
   "usage.section.providers": "Anbieter",
