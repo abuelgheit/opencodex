@@ -45,7 +45,7 @@ describe("parseRange", () => {
       entry({
         ts: todayMidnight + 3_600_000,
         usageStatus: "reported",
-        usage: { inputTokens: 20, outputTokens: 2 },
+        usage: { inputTokens: 20, outputTokens: 2, cacheReadInputTokens: 12 },
         totalTokens: 22,
       }),
     ];
@@ -57,7 +57,8 @@ describe("parseRange", () => {
     expect(morningSummary.days).toHaveLength(1);
     expect(morningSummary.hours).toHaveLength(24);
     expect(morningSummary.hours.find(hour => hour.hour === new Date(todayMidnight + 3_600_000).getHours()))
-      .toMatchObject({ date: morningSummary.days[0]!.date, requests: 1, totalTokens: 22 });
+      .toMatchObject({ date: morningSummary.days[0]!.date, requests: 1, totalTokens: 22, inputTokens: 20, cacheReadInputTokens: 12 });
+    expect(morningSummary.days[0]).toMatchObject({ inputTokens: 20, cacheReadInputTokens: 12 });
     expect(morningSummary.summary).toMatchObject({ requests: 1, totalTokens: 22 });
     expect(eveningSummary.since).toBe(todayMidnight);
     expect(eveningSummary.days).toHaveLength(1);

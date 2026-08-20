@@ -40,6 +40,8 @@ export interface UsageDay {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens: number;
+  cacheReadInputTokens: number;
   models: UsageDayModel[];
 }
 
@@ -59,6 +61,8 @@ export interface UsageHour {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens: number;
+  cacheReadInputTokens: number;
   models: UsageDayModel[];
 }
 
@@ -369,6 +373,15 @@ function addTokens(
   totals.totalTokens += usageDisplayTotalTokens(entry.usage, entry.totalTokens) ?? 0;
 }
 
+function addCacheTokens(
+  bucket: Pick<UsageDay, "inputTokens" | "cacheReadInputTokens">,
+  usage: PersistedUsageEntry["usage"],
+): void {
+  if (!usage) return;
+  bucket.inputTokens += usage.inputTokens;
+  bucket.cacheReadInputTokens += normalizedCacheReadInputTokens(usage);
+}
+
 function finalizeCoverage(totals: UsageSummaryTotals): void {
   totals.coverageRatio = totals.requests === 0 ? 0 : totals.measuredRequests / totals.requests;
 }
@@ -425,19 +438,38 @@ function buildDayGrid(range: UsageRange, since: number | null, now: number, entr
     const d = new Date(startOfToday);
     d.setDate(d.getDate() - i);
     const key = localDateKey(d.getTime());
-    grid.set(key, { date: key, requests: 0, measuredRequests: 0, reportedRequests: 0, totalTokens: 0, models: [] });
+    grid.set(key, {
+      date: key,
+      requests: 0,
+      measuredRequests: 0,
+      reportedRequests: 0,
+      totalTokens: 0,
+      inputTokens: 0,
+      cacheReadInputTokens: 0,
+      models: [],
+    });
   }
   for (const entry of entries) {
     const key = localDateKey(entry.timestamp);
     let day = grid.get(key);
     if (!day) {
-      day = { date: key, requests: 0, measuredRequests: 0, reportedRequests: 0, totalTokens: 0, models: [] };
+      day = {
+        date: key,
+        requests: 0,
+        measuredRequests: 0,
+        reportedRequests: 0,
+        totalTokens: 0,
+        inputTokens: 0,
+        cacheReadInputTokens: 0,
+        models: [],
+      };
       grid.set(key, day);
     }
     day.requests += 1;
     if (isMeasuredStatus(entry.usageStatus)) day.measuredRequests += 1;
     if (entry.usageStatus === "reported") day.reportedRequests += 1;
     day.totalTokens += usageDisplayTotalTokens(entry.usage, entry.totalTokens) ?? 0;
+    addCacheTokens(day, entry.usage);
     for (const attribution of usageAttributions(entry)) bumpDayModel(key, attribution);
   }
   void since;
@@ -490,7 +522,17 @@ function buildHourGrid(range: UsageRange, now: number, entries: PersistedUsageEn
   };
 
   for (let hour = 0; hour < 24; hour++) {
-    grid.set(hour, { date, hour, requests: 0, measuredRequests: 0, reportedRequests: 0, totalTokens: 0, models: [] });
+    grid.set(hour, {
+      date,
+      hour,
+      requests: 0,
+      measuredRequests: 0,
+      reportedRequests: 0,
+      totalTokens: 0,
+      inputTokens: 0,
+      cacheReadInputTokens: 0,
+      models: [],
+    });
   }
   for (const entry of entries) {
     if (localDateKey(entry.timestamp) !== date) continue;
@@ -501,6 +543,7 @@ function buildHourGrid(range: UsageRange, now: number, entries: PersistedUsageEn
     if (isMeasuredStatus(entry.usageStatus)) bucket.measuredRequests += 1;
     if (entry.usageStatus === "reported") bucket.reportedRequests += 1;
     bucket.totalTokens += usageDisplayTotalTokens(entry.usage, entry.totalTokens) ?? 0;
+    addCacheTokens(bucket, entry.usage);
     for (const attribution of usageAttributions(entry)) bumpHourModel(hour, attribution);
   }
 

@@ -470,7 +470,7 @@ describe("GET /api/usage", () => {
         status: 200,
         durationMs: 10,
         usageStatus: "reported",
-        usage: { inputTokens: 10, outputTokens: 5 },
+        usage: { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 4 },
         totalTokens: 15,
       }),
     ];
@@ -483,8 +483,10 @@ describe("GET /api/usage", () => {
       expect(body.range).toBe("today");
       expect(body.summary).toMatchObject({ requests: 1, totalTokens: 15 });
       expect(body.days).toHaveLength(1);
+      expect(body.days[0]).toMatchObject({ inputTokens: 10, cacheReadInputTokens: 4 });
       expect(body.hours).toHaveLength(24);
-      expect(body.hours.find((hour: { requests: number }) => hour.requests === 1)?.totalTokens).toBe(15);
+      expect(body.hours.find((hour: { requests: number }) => hour.requests === 1))
+        .toMatchObject({ totalTokens: 15, inputTokens: 10, cacheReadInputTokens: 4 });
     } finally {
       await server.stop(true);
       nowSpy.mockRestore();
