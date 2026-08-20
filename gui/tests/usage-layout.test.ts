@@ -282,6 +282,71 @@ test("Usage clamps negative cache-read percentages to 0%", async () => {
   });
 });
 
+test("Usage defaults to 7 days and requests that range", async () => {
+  const globalKeys = ["document", "window", "navigator", "localStorage", "ResizeObserver", "IS_REACT_ACT_ENVIRONMENT"] as const;
+  const previous = Object.fromEntries(globalKeys.map(key => [key, Reflect.get(globalThis, key)]));
+  const originalFetch = globalThis.fetch;
+  const testWindow = new Window({ url: "http://localhost/" });
+  const apiBase = `http://usage-range-test-${++usageCacheTestCase}`;
+  const windowResizeObserver = Reflect.get(testWindow, "ResizeObserver");
+  const resizeObserver = typeof windowResizeObserver === "function"
+    ? windowResizeObserver
+    : class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      };
+  Object.defineProperties(globalThis, {
+    document: { configurable: true, value: testWindow.document },
+    window: { configurable: true, value: testWindow },
+    navigator: { configurable: true, value: testWindow.navigator },
+    localStorage: { configurable: true, value: testWindow.localStorage },
+    ResizeObserver: { configurable: true, value: resizeObserver },
+  });
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  clearClientResourceStoresForTests();
+  const requestedUrls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    requestedUrls.push(url);
+    if (url.endsWith("/api/provider-quotas")) {
+      return { ok: true, json: async () => ({ generatedAt: Date.now(), reports: [] }) };
+    }
+    return { ok: true, json: async () => usageFixture([]) };
+  }) as typeof fetch;
+
+  const container = document.createElement("div");
+  document.body.append(container);
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(createElement(LanguageProvider, null, createElement(Usage, { apiBase })));
+    });
+    const deadline = Date.now() + 1_000;
+    while (!requestedUrls.some(url => url.includes("/api/usage?range=7d"))) {
+      if (Date.now() >= deadline) throw new Error("Usage did not request the default 7d range");
+      await act(async () => {
+        await new Promise<void>(resolve => testWindow.setTimeout(resolve, 10));
+      });
+    }
+
+    const rangeButtons = [...(container.querySelectorAll(".usage-head .usage-segmented")[1]?.querySelectorAll("button") ?? [])];
+    expect(rangeButtons.map(button => button.textContent)).toEqual(["7d", "30d", "Available history"]);
+    expect(rangeButtons.map(button => button.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
+    expect(requestedUrls.some(url => url.endsWith("/api/provider-quotas"))).toBe(true);
+  } finally {
+    await act(async () => { root.unmount(); });
+    container.remove();
+    globalThis.fetch = originalFetch;
+    clearClientResourceStoresForTests();
+    testWindow.close();
+    for (const key of globalKeys) {
+      Object.defineProperty(globalThis, key, { configurable: true, value: previous[key] });
+    }
+  }
+});
+
 test("Usage places Weekly limit immediately before Share and renders provider quota percent", async () => {
   await withRenderedUsage({
     providers: [{ provider: "anthropic" }],
