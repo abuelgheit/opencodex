@@ -323,7 +323,7 @@ function UsageFilters({
         })}
       </div>
       <div className="usage-segmented" role="group" aria-label={t("usage.title")}>
-        {(["all", "30d", "7d"] as Range[]).map(choice => {
+        {(["7d", "30d", "all"] as Range[]).map(choice => {
           const label = choice === "all" ? t("usage.range.available") : t(`usage.range.${choice}`);
           return (
             <button
@@ -847,7 +847,7 @@ function writeHeldUsage(apiBase: string, range: Range, surface: UsageSurface, va
 
 export default function Usage({ apiBase }: { apiBase: string }) {
   const { t, locale } = useI18n();
-  const [range, setRange] = useState<Range>("30d");
+  const [range, setRange] = useState<Range>("7d");
   const [surface, setSurface] = useState<UsageSurface>("all");
   const [modelQuery, setModelQuery] = useState("");
 
