@@ -49,6 +49,8 @@ interface UsageDay {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens?: number;
+  cacheReadInputTokens?: number;
   models: UsageDayModel[];
 }
 
@@ -66,6 +68,8 @@ interface UsageHour {
   measuredRequests: number;
   reportedRequests: number;
   totalTokens: number;
+  inputTokens?: number;
+  cacheReadInputTokens?: number;
   models: UsageDayModel[];
 }
 
@@ -327,6 +331,8 @@ function lastSevenDays(days: UsageDay[]): UsageDay[] {
       measuredRequests: d?.measuredRequests ?? 0,
       reportedRequests: d?.reportedRequests ?? 0,
       totalTokens: d?.totalTokens ?? 0,
+      inputTokens: d?.inputTokens ?? 0,
+      cacheReadInputTokens: d?.cacheReadInputTokens ?? 0,
       models: d?.models ?? [],
     });
     cursor.setDate(cursor.getDate() + 1);
@@ -390,6 +396,8 @@ function emptyTodayHours(): UsageHour[] {
     measuredRequests: 0,
     reportedRequests: 0,
     totalTokens: 0,
+    inputTokens: 0,
+    cacheReadInputTokens: 0,
     models: [],
   }));
 }
