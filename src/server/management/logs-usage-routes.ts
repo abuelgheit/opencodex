@@ -345,6 +345,7 @@ export async function handleLogsUsageRoutes(ctx: ManagementContext): Promise<Res
           unmeteredRequests: 0,
         },
         days: [],
+        hours: [],
         models: [],
         providers: [],
         accounts: [],

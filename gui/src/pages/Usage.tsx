@@ -59,6 +59,16 @@ interface UsageDayModel {
   totalTokens: number;
 }
 
+interface UsageHour {
+  date: string;
+  hour: number;
+  requests: number;
+  measuredRequests: number;
+  reportedRequests: number;
+  totalTokens: number;
+  models: UsageDayModel[];
+}
+
 interface UsageModel {
   provider: string;
   model: string;
@@ -114,6 +124,8 @@ interface UsageResponse extends UsageReadMetadata {
   generatedAt: number;
   summary: UsageSummaryTotals;
   days: UsageDay[];
+  // Optional so the dashboard remains readable against a proxy from before hourly buckets.
+  hours?: UsageHour[];
   models: UsageModel[];
   providers: UsageProvider[];
   historyTruncated: boolean;
@@ -366,6 +378,20 @@ function dayDetail(day: Pick<UsageDay, "date" | "requests" | "totalTokens">, loc
     requests: day.requests,
     tokens: formatTokens(day.totalTokens, locale),
   });
+}
+
+function emptyTodayHours(): UsageHour[] {
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return Array.from({ length: 24 }, (_, hour) => ({
+    date,
+    hour,
+    requests: 0,
+    measuredRequests: 0,
+    reportedRequests: 0,
+    totalTokens: 0,
+    models: [],
+  }));
 }
 
 function quantileBuckets(values: number[]): number[] {
@@ -657,18 +683,109 @@ function WeekDayBars({ weekBars, locale, t }: { weekBars: UsageDay[]; locale: Lo
   );
 }
 
+
+type UsageActivityBar = UsageDay | UsageHour;
+
+function activityBarKey(bar: UsageActivityBar): string {
+  return "hour" in bar ? `${bar.date}-${bar.hour}` : bar.date;
+}
+
+function activityBarLabel(bar: UsageActivityBar): string {
+  return "hour" in bar ? String(bar.hour).padStart(2, "0") : bar.date.slice(5);
+}
+
+function activityBarTooltipLabel(bar: UsageActivityBar): string {
+  return "hour" in bar ? `${bar.date} ${String(bar.hour).padStart(2, "0")}:00` : bar.date;
+}
+
+function activityBarCacheHitPercentage(bar: UsageActivityBar): string {
+  if (!Number.isFinite(bar.inputTokens) || (bar.inputTokens ?? 0) <= 0) return "—";
+  if (!Number.isFinite(bar.cacheReadInputTokens)) return "—";
+  const ratio = (bar.cacheReadInputTokens ?? 0) / (bar.inputTokens ?? 0);
+  if (!Number.isFinite(ratio)) return "—";
+  return formatPct(Math.min(1, Math.max(0, ratio)));
+}
+
+function UsageActivityBars({
+  bars,
+  locale,
+  t,
+  hourly = false,
+}: {
+  bars: UsageActivityBar[];
+  locale: Locale;
+  t: TFn;
+  hourly?: boolean;
+}) {
+  const [hoverBar, setHoverBar] = useState<string | null>(null);
+  const max = Math.max(1, ...bars.map(bar => bar.totalTokens));
+
+  return (
+    <div className={hourly ? "daybars-scroll daybars-scroll-hourly" : undefined}>
+      <div className={`daybars${hourly ? " daybars-hourly" : ""}`} role="img" aria-label={t(hourly ? "usage.section.hourly" : "usage.section.heatmap")}>
+        {bars.map(bar => {
+          const key = activityBarKey(bar);
+          const percentage = Math.round((bar.totalTokens / max) * 100);
+          const label = activityBarLabel(bar);
+          return (
+            <div
+              key={key}
+              className="daybar"
+              onMouseEnter={() => setHoverBar(key)}
+              onMouseLeave={() => setHoverBar(current => (current === key ? null : current))}
+            >
+              <div className="daybar-track">
+                <div
+                  className="daybar-stack"
+                  style={{ ["--daybar-scale" as string]: String(Math.max(0, Math.min(1, percentage / 100))) }}
+                >
+                  {bar.models.map(model => (
+                    <div
+                      key={`${model.provider}/${model.model}`}
+                      className="daybar-seg"
+                      style={{ flexGrow: model.totalTokens, background: modelColor(model.model, model.provider) }}
+                    />
+                  ))}
+                  {bar.models.length === 0 && bar.totalTokens > 0 && (
+                    <div className="daybar-seg" style={{ flexGrow: 1, background: "var(--green)" }} />
+                  )}
+                </div>
+              </div>
+              {hoverBar === key && bar.totalTokens > 0 && (
+                <div className="daybar-tip" role="tooltip">
+                  <div className="daybar-tip-date">{activityBarTooltipLabel(bar)}</div>
+                  {bar.models.slice(0, 8).map(model => (
+                    <div key={`${model.provider}/${model.model}`} className="daybar-tip-row">
+                      <span className="daybar-tip-swatch" style={{ background: modelColor(model.model, model.provider) }} />
+                      <span className="daybar-tip-name">{modelLabel(model.model)}</span>
+                      <span className="daybar-tip-val">{formatTokens(model.totalTokens, locale)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <span className="daybar-count">{formatTokens(bar.totalTokens, locale)}</span>
+              <span className="daybar-cache" title={t("usage.col.cacheHit")}>{activityBarCacheHitPercentage(bar)}</span>
+              <span className="daybar-label muted">{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function UsageHeatmapPanel({
   range,
   heatmap,
   weekBars,
-  todayBars,
+  todayHours,
   locale,
   t,
 }: {
   range: Range | null;
   heatmap: ReturnType<typeof buildHeatmap>;
   weekBars: UsageDay[];
-  todayBars: UsageDay[];
+  todayHours: UsageHour[];
   locale: Locale;
   t: TFn;
 }) {
@@ -714,9 +831,9 @@ function UsageHeatmapPanel({
 
   return (
     <section className="panel" style={{ marginTop: 16 }} aria-labelledby="usage-heatmap-title">
-      <h3 id="usage-heatmap-title" className="panel-title">{t("usage.section.heatmap")}</h3>
+      <h3 id="usage-heatmap-title" className="panel-title">{t(range === "today" ? "usage.section.hourly" : "usage.section.heatmap")}</h3>
       {range === "today" ? (
-        <WeekDayBars weekBars={todayBars} locale={locale} t={t} />
+        <UsageActivityBars bars={todayHours} locale={locale} t={t} hourly />
       ) : range === "7d" ? (
         <WeekDayBars weekBars={weekBars} locale={locale} t={t} />
       ) : (
@@ -1047,7 +1164,7 @@ function UsageWorkspaceBody({
   data,
   heatmap,
   weekBars,
-  todayBars,
+  todayHours,
   activeDays,
   filteredModels,
   modelQuery,
@@ -1062,7 +1179,7 @@ function UsageWorkspaceBody({
   data: UsageResponse | null;
   heatmap: ReturnType<typeof buildHeatmap>;
   weekBars: UsageDay[];
-  todayBars: UsageDay[];
+  todayHours: UsageHour[];
   activeDays: number;
   filteredModels: UsageModel[];
   modelQuery: string;
@@ -1084,7 +1201,7 @@ function UsageWorkspaceBody({
       body: data ? (
         <>
           <UsageSummaryCards summary={data.summary} activeDays={activeDays} locale={locale} t={t} />
-          <UsageHeatmapPanel range={range} heatmap={heatmap} weekBars={weekBars} todayBars={todayBars} locale={locale} t={t} />
+          <UsageHeatmapPanel range={range} heatmap={heatmap} weekBars={weekBars} todayHours={todayHours} locale={locale} t={t} />
         </>
       ) : null,
     },
@@ -1239,12 +1356,7 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
 
   const heatmap = useMemo(() => buildHeatmap(data?.days ?? [], !!customWindow), [data?.days, customWindow]);
   const weekBars = useMemo(() => lastSevenDays(data?.days ?? []), [data?.days]);
-  const todayBars = useMemo(() => {
-    const today = new Date();
-    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const currentDay = data?.days.find(day => day.date === date);
-    return [currentDay ?? { date, requests: 0, measuredRequests: 0, reportedRequests: 0, totalTokens: 0, models: [] }];
-  }, [data?.days]);
+  const todayHours = useMemo(() => data?.hours ?? emptyTodayHours(), [data?.hours]);
   const activeDays = useMemo(() => (data?.days ?? []).filter(d => d.requests > 0).length, [data?.days]);
   const filteredModels = useMemo(() => {
     const q = modelQuery.trim().toLowerCase();
@@ -1403,7 +1515,7 @@ export default function Usage({ apiBase, connected = false, apiKeyId }: { apiBas
             data={data}
             heatmap={heatmap}
             weekBars={weekBars}
-            todayBars={todayBars}
+            todayHours={todayHours}
             activeDays={activeDays}
             filteredModels={filteredModels}
             modelQuery={modelQuery}
