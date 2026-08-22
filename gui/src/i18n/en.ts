@@ -884,6 +884,7 @@ export const en = {
   "usage.col.measured": "Measured",
   "usage.col.reported": "Reported",
   "usage.col.cacheHit": "Cache hit",
+  "usage.col.cost": "Cost",
   "usage.col.tokens": "Tokens",
   "usage.col.share": "Share",
   "usage.heatmap.less": "Less",

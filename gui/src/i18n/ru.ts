@@ -868,6 +868,7 @@ export const ru: Record<TKey, string> = {
   "usage.col.measured": "Измерено",
   "usage.col.reported": "Сообщено",
   "usage.col.cacheHit": "Попадание в кэш",
+  "usage.col.cost": "Стоимость",
   "usage.col.tokens": "Токены",
   "usage.col.share": "Доля",
   "usage.heatmap.less": "Меньше",

@@ -875,6 +875,7 @@ export const tr: Record<TKey, string> = {
   "usage.col.measured": "Ölçülen",
   "usage.col.reported": "Bildirilen",
   "usage.col.cacheHit": "Önbellek isabeti",
+  "usage.col.cost": "Maliyet",
   "usage.col.tokens": "Jetonlar",
   "usage.col.share": "Pay",
   "usage.heatmap.less": "Daha az",

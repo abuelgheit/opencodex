@@ -690,6 +690,7 @@ export const zhTW: Record<TKey, string> = {
   "usage.col.measured": "已計量",
   "usage.col.reported": "已上報",
   "usage.col.cacheHit": "快取命中",
+  "usage.col.cost": "費用",
   "usage.col.tokens": "Token 數",
   "usage.col.share": "佔比",
   "usage.heatmap.less": "少",

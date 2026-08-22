@@ -827,6 +827,7 @@ export const ja: Record<TKey, string> = {
   "usage.col.measured": "計測",
   "usage.col.reported": "報告",
   "usage.col.cacheHit": "キャッシュヒット",
+  "usage.col.cost": "コスト",
   "usage.col.tokens": "トークン",
   "usage.col.share": "割合",
   "usage.heatmap.less": "少ない",

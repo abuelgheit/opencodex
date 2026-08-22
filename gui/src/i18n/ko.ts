@@ -869,6 +869,7 @@ export const ko: Record<TKey, string> = {
   "usage.col.measured": "측정됨",
   "usage.col.reported": "측정됨",
   "usage.col.cacheHit": "캐시 히트",
+  "usage.col.cost": "비용",
   "usage.col.tokens": "토큰",
   "usage.col.share": "비율",
   "usage.heatmap.less": "적음",

@@ -82,6 +82,7 @@ interface UsageModel {
   outputTokensPerSecondEstimated?: boolean;
   cacheReadInputTokens?: number;
   shareRatio: number;
+  estimatedCostUsd?: number;
 }
 
 interface UsageProvider {
@@ -194,6 +195,17 @@ function formatModelTokPerSecond(value: unknown, estimated: boolean | undefined,
     maximumFractionDigits: digits,
   }).format(value);
   return `${estimated === true ? "~" : ""}${formatted}`;
+}
+
+function formatModelCost(value: unknown, localeTag?: string): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "—";
+  const formatted = new Intl.NumberFormat(localeTag, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+  return `~${formatted}`;
 }
 
 function cacheHitPercentage(summary: Pick<UsageSummaryTotals, "inputTokens" | "cachedInputTokens" | "cacheReadInputTokens">): string {
@@ -685,6 +697,7 @@ function UsageModelsTable({
             <th className="num">{t("usage.col.tokens")}</th>
             <th className="num" title={t("logs.metric.tokPerSecTitle")}>{t("logs.col.tokPerSec")}</th>
             <th>{t("usage.col.cacheHit")}</th>
+            <th className="num">{t("usage.col.cost")}</th>
             <th>{t("usage.col.share")}</th>
           </tr>
         </thead>
@@ -698,6 +711,7 @@ function UsageModelsTable({
               <td className="num mono">{formatTokens(model.totalTokens, locale)}</td>
               <td className="num mono">{formatModelTokPerSecond(model.outputTokensPerSecond, model.outputTokensPerSecondEstimated, locale)}</td>
               <td>{modelCacheHitPercentage(model)}</td>
+              <td className="num mono">{formatModelCost(model.estimatedCostUsd, locale)}</td>
               <td><div className="usage-bar"><div className="usage-bar-fill" style={{ width: `${Math.round(model.shareRatio * 100)}%` }} /></div></td>
             </tr>
           ))}
