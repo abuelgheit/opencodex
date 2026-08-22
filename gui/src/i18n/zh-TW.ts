@@ -930,6 +930,7 @@ export const zhTW: Record<TKey, string> = {
   "usage.cacheHitRate.partial": "全部 {total} 個輸入 Token 中，有 {measured} 個提供了快取明細，命中率取這些資料的平均值；其餘請求未回報快取明細。",
   "usage.cacheHitRate.unmeasured": "此資料列的所有請求都未回報快取明細，因此無法計算平均命中率。",
   "usage.unavailable": "—",
+  "usage.col.cost": "費用",
   "usage.col.tokens": "Token 數",
   "usage.col.apiListPrice": "API 標價",
   "usage.col.share": "佔比",

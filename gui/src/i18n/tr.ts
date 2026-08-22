@@ -1171,6 +1171,7 @@ export const tr: Record<TKey, string> = {
   "usage.cacheHitRate.partial": "Toplam {total} girdi jetonunun {measured} kadarı üzerinden ortalama hesaplandı; kalan isteklerde önbellek ayrıntısı bildirilmedi.",
   "usage.cacheHitRate.unmeasured": "Bu satırdaki hiçbir istek önbellek ayrıntısı bildirmediği için hesaplanabilecek bir ortalama isabet oranı yok.",
   "usage.unavailable": "—",
+  "usage.col.cost": "Maliyet",
   "usage.col.tokens": "Jetonlar",
   "usage.col.apiListPrice": "API liste fiyatı",
   "usage.col.share": "Pay",

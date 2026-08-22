@@ -1146,6 +1146,7 @@ export const zh: Record<TKey, string> = {
   "usage.cacheHitRate.partial": "全部 {total} 个输入 Token 中，有 {measured} 个提供了缓存明细，命中率取这些数据的平均值；其余请求未报告缓存明细。",
   "usage.cacheHitRate.unmeasured": "此行没有任何请求报告缓存明细，因此无法计算平均命中率。",
   "usage.unavailable": "—",
+  "usage.col.cost": "费用",
   "usage.col.tokens": "Token 数",
   "usage.col.apiListPrice": "API 标价",
   "usage.col.share": "占比",

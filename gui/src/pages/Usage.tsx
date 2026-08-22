@@ -99,6 +99,7 @@ interface UsageModel {
   /** Requests excluded from the estimate because price or usable usage is unavailable. */
   unpricedRequests?: number;
   shareRatio: number;
+  estimatedCostUsd?: number;
 }
 
 interface UsageProvider {

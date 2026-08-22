@@ -1095,6 +1095,7 @@ export const ja: Record<TKey, string> = {
   "usage.cacheHitRate.partial": "入力トークン全体 {total} のうち {measured} を対象に平均しています。残りのリクエストではキャッシュの詳細が報告されていません。",
   "usage.cacheHitRate.unmeasured": "この行のリクエストはいずれもキャッシュの詳細を報告していないため、平均ヒット率はありません。",
   "usage.unavailable": "—",
+  "usage.col.cost": "コスト",
   "usage.col.tokens": "トークン",
   "usage.col.apiListPrice": "API 定価",
   "usage.col.share": "割合",

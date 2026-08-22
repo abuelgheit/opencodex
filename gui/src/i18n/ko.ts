@@ -1165,6 +1165,7 @@ export const ko: Record<TKey, string> = {
   "usage.cacheHitRate.partial": "전체 입력 토큰 {total} 중 {measured}에 대해 계산한 평균입니다. 나머지 요청에는 캐시 세부 정보가 없습니다.",
   "usage.cacheHitRate.unmeasured": "이 행의 요청에는 모두 캐시 세부 정보가 없어 평균 히트율을 계산할 수 없습니다.",
   "usage.unavailable": "—",
+  "usage.col.cost": "비용",
   "usage.col.tokens": "토큰",
   "usage.col.apiListPrice": "API 정가",
   "usage.col.share": "비율",
