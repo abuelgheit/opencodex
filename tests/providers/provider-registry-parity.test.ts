@@ -153,6 +153,38 @@ describe("provider registry parity", () => {
       "deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro", "deepseek-v4-flash",
     ]);
   });
+  // Registry-to-cost-metadata parity for the openrouter entry: every model the picker can route
+  // must have a cost row in the vendored catalog, resolved by exact native id (no vendor-prefix
+  // fallback). Regression: `stealth/ox-alpha` and `openai/gpt-5.6` were registered but absent from
+  // the snapshot, so their usage rows had no price. Explicit zero pricing is still a cost row —
+  // free is a fact the catalog records, not a gap.
+  test("every registered openrouter model has exact cost metadata in the catalog", () => {
+    const entry = PROVIDER_REGISTRY.find(provider => provider.id === "openrouter");
+    expect(entry?.models.length).toBe(6);
+
+    const expectedCosts: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+      "anthropic/claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+      "stealth/ox-alpha": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      "openai/gpt-5.6": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+      "openai/gpt-5.6-sol": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+      "openai/gpt-5.6-terra": { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 3.125 },
+      "openai/gpt-5.6-luna": { input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
+    };
+
+    expect([...entry!.models].sort()).toEqual(Object.keys(expectedCosts).sort());
+    for (const modelId of entry!.models) {
+      const meta = getModelMetadata("openrouter", modelId);
+      expect(meta, modelId).toBeDefined();
+      expect(meta?.provider, modelId).toBe("openrouter");
+      // Float-tolerant compare: the vendored snapshot stores 0.19999999999999998 for 0.2.
+      const expected = expectedCosts[modelId];
+      for (const field of ["input", "output", "cacheRead", "cacheWrite"] as const) {
+        expect(meta?.cost?.[field], `${modelId}.${field}`).toBeCloseTo(expected[field], 12);
+      }
+    }
+    // The native openai/gpt-5.6 slug lives in the OPENROUTER bundle, not the openai one.
+    expect(getModelMetadata("openrouter", "gpt-5.6")).toBeUndefined();
+  });
 
   test("OpenAI API route max-input metadata is trusted and user values only lower it", () => {
     const makeConfig = (value: number, context = 2_000_000): OcxConfig => ({

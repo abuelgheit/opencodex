@@ -613,6 +613,43 @@ describe("parseUsageSurface", () => {
 });
 
 describe("summarizeUsage", () => {
+  test("propagates openrouter cost estimates and explicit-free rows to models[]", () => {
+    const entries: PersistedUsageEntry[] = [
+      // Billable registered slug: openrouter/openai/gpt-5.6 resolves via the openrouter bundle
+      // at 5/30/0.5/6.25 -> (100*5 + 10*30)/1e6 = 0.0008.
+      entry({
+        ts: FIXED_NOW - 1000,
+        provider: "openrouter",
+        model: "openai/gpt-5.6",
+        usageStatus: "reported",
+        usage: { inputTokens: 100, outputTokens: 10 },
+      }),
+      // Explicit-zero free slug: catalog records $0, but the estimator treats zero as "not
+      // billable here" — the row stays unpriced (no invented charge) and the model still
+      // aggregates its tokens.
+      entry({
+        ts: FIXED_NOW - 2000,
+        provider: "openrouter",
+        model: "stealth/ox-alpha",
+        usageStatus: "reported",
+        usage: { inputTokens: 50, outputTokens: 5 },
+      }),
+    ];
+    const sum = summarizeUsage(entries, "30d", FIXED_NOW);
+    const byModel = Object.fromEntries(sum.models.map(m => [`${m.provider}/${m.model}`, m]));
+
+    const gpt56 = byModel["openrouter/openai/gpt-5.6"];
+    expect(gpt56).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 110 });
+    expect(gpt56.estimatedCostUsd).toBeCloseTo(0.0008, 12);
+    expect(sum.summary.pricedRequests).toBe(1);
+    expect(sum.summary.unpricedRequests).toBe(1);
+    expect(sum.summary.estimatedCostUsd).toBeCloseTo(0.0008, 12);
+
+    const ox = byModel["openrouter/stealth/ox-alpha"];
+    expect(ox).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 55 });
+    expect(ox.estimatedCostUsd).toBeUndefined();
+  });
+
   test("aggregates estimated cost via model-level prices and counts unpriced rows", () => {
     const entries: PersistedUsageEntry[] = [
       // priced via openai bundle model-level price (5/30): cost = (100*5 + 10*30)/1e6 = 0.0008

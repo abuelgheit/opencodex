@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createAdapterTierMetadata } from "../../src/providers/fastwire";
+import { getModelMetadata } from "../../src/generated/model-metadata";
 import {
   calculateCost,
   estimateAttemptCost,
@@ -296,6 +297,45 @@ describe("resolveMatchedPrice", () => {
     const slash = resolveMatchedPrice("openrouter", "anthropic/claude-3.5-sonnet");
     expect(slash?.source).toBe("jawcode");
     expect(resolveMatchedPrice("openrouter", "anthropic-claude-3.5-sonnet")).toBeNull();
+  });
+  // Registered OpenRouter slugs must resolve from the OPENROUTER bundle row itself — an exact
+  // native-id match, never a vendor-prefix fallback onto the OpenAI bundle. Regression: the
+  // openrouter registry seeds `openai/gpt-5.6` (base) but the vendored snapshot only carried the
+  // sol/terra/luna variants, so every request on the base slug rendered an em dash instead of a
+  // price.
+  test("9b. openai/gpt-5.6 resolves from the openrouter bundle, not a vendor-prefix fallback", () => {
+    const price = resolveMatchedPrice("openrouter", "openai/gpt-5.6");
+    expect(price).toMatchObject({
+      provider: "openrouter",
+      modelId: "openai/gpt-5.6",
+      jawcodeProvider: "openrouter",
+      cost4: { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
+      source: "jawcode",
+      status: "verified",
+    });
+    // An exact openrouter bundle row, not a stripped-prefix openai lookup: the bare id only
+    // satisfies the DOCUMENTED model-level vendor fallback (verified-derived), which must never
+    // be what prices the native openai/gpt-5.6 slug. No fuzzy fallback on the vendor separator.
+    const bare = resolveMatchedPrice("openrouter", "gpt-5.6");
+    expect(bare).not.toBeNull();
+    expect(bare).toMatchObject({ jawcodeProvider: "openai", status: "verified-derived" });
+    expect(resolveMatchedPrice("openrouter", "openai-gpt-5.6")).toBeNull();
+  });
+
+  // stealth/ox-alpha is registered on openrouter and genuinely free ($0, OpenRouter /api/v1/models).
+  // The catalog records the explicit zero so the metadata is truthful; the estimator's documented
+  // policy treats all-zero rows as "not billable here" rather than inventing a $0 charge, so the
+  // price stays null while getModelMetadata still exposes the free row.
+  test("9c. explicit zero pricing for stealth/ox-alpha: metadata truth, no invented charge", () => {
+    const meta = getModelMetadata("openrouter", "stealth/ox-alpha");
+    expect(meta).toMatchObject({
+      provider: "openrouter",
+      id: "stealth/ox-alpha",
+      contextWindow: 1_048_576,
+      maxTokens: 131_072,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    });
+    expect(resolveMatchedPrice("openrouter", "stealth/ox-alpha")).toBeNull();
   });
 
   test("16. shipped overlay membership: 70 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
