@@ -356,6 +356,34 @@ describe("resolveMatchedPrice", () => {
     });
   });
 
+  // deepseek/deepseek-v4-flash-0731 ships on OpenRouter at verified per-million rates
+  // (0.08 in / 0.18 out / 0.016 cache read / 0 cache write). Its metadata row must resolve
+  // from the OPENROUTER bundle itself by exact native slug — never a vendor-prefix strip
+  // onto a bare deepseek id, which has no catalog row.
+  test("9d. deepseek/deepseek-v4-flash-0731 resolves exactly from the openrouter bundle", () => {
+    const meta = getModelMetadata("openrouter", "deepseek/deepseek-v4-flash-0731");
+    expect(meta).toMatchObject({
+      provider: "openrouter",
+      id: "deepseek/deepseek-v4-flash-0731",
+      contextWindow: 1_048_576,
+      maxTokens: 384_000,
+      reasoning: true,
+      cost: { input: 0.08, output: 0.18, cacheRead: 0.016, cacheWrite: 0 },
+    });
+    expect(resolveMatchedPrice("openrouter", "deepseek/deepseek-v4-flash-0731")).toMatchObject({
+      provider: "openrouter",
+      modelId: "deepseek/deepseek-v4-flash-0731",
+      jawcodeProvider: "openrouter",
+      cost4: { input: 0.08, output: 0.18, cacheRead: 0.016, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified",
+    });
+    // No vendor-prefix inference: the hyphenized bare id is not the native slug and has no
+    // catalog row, so it must not resolve through any fallback.
+    expect(resolveMatchedPrice("openrouter", "deepseek-v4-flash-0731")).toBeNull();
+    expect(resolveMatchedPrice("deepseek", "deepseek/deepseek-v4-flash-0731")).toBeNull();
+  });
+
   test("16. shipped overlay membership: 70 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
     expect(EXPECTED_PRICE_OVERLAYS.length).toBe(70);
     expect(EXPECTED_PRICE_OVERLAYS.some(row => row.status === "unverified")).toBe(false);

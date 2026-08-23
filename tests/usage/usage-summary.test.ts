@@ -649,6 +649,31 @@ describe("summarizeUsage", () => {
     expect(ox.estimatedCostUsd).toBe(0);
   });
 
+  // deepseek/deepseek-v4-flash-0731 bills on OpenRouter at 0.08/0.18/0.016/0 per million.
+  // Its verified cost row must propagate from the openrouter registry seed into the usage
+  // summary's per-model and aggregate estimates (regression: pickable but unpriced rows).
+  test("propagates deepseek/deepseek-v4-flash-0731 estimated cost into the summary", () => {
+    const entries: PersistedUsageEntry[] = [
+      entry({
+        ts: FIXED_NOW - 1000,
+        provider: "openrouter",
+        model: "deepseek/deepseek-v4-flash-0731",
+        usageStatus: "reported",
+        usage: { inputTokens: 100, outputTokens: 10 },
+      }),
+    ];
+    const sum = summarizeUsage(entries, "30d", FIXED_NOW);
+    const byModel = Object.fromEntries(sum.models.map(m => [`${m.provider}/${m.model}`, m]));
+
+    const row = byModel["openrouter/deepseek/deepseek-v4-flash-0731"];
+    expect(row).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 110 });
+    // (100 * 0.08 + 10 * 0.18) / 1e6 = 0.0000098
+    expect(row.estimatedCostUsd).toBeCloseTo(0.0000098, 12);
+    expect(sum.summary.pricedRequests).toBe(1);
+    expect(sum.summary.unpricedRequests).toBe(0);
+    expect(sum.summary.estimatedCostUsd).toBeCloseTo(0.0000098, 12);
+  });
+
   test("aggregates estimated cost via model-level prices and counts unpriced rows", () => {
     const entries: PersistedUsageEntry[] = [
       // priced via openai bundle model-level price (5/30): cost = (100*5 + 10*30)/1e6 = 0.0008

@@ -62884,6 +62884,30 @@
 				"maxLevel": "high"
 			}
 		},
+		"~deepseek/deepseek-v4-flash-latest": {
+			"id": "~deepseek/deepseek-v4-flash-latest",
+			"name": "DeepSeek V4 Flash (latest)",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.08,
+				"output": 0.18,
+				"cacheRead": 0.016,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 384000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
+		},
 		"~google/gemini-flash-latest": {
 			"id": "~google/gemini-flash-latest",
 			"name": "Google Gemini Flash Latest",
@@ -64456,6 +64480,54 @@
 				"input": 0.09380000000000001,
 				"output": 0.18760000000000002,
 				"cacheRead": 0.01876,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 384000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
+		},
+		"deepseek/deepseek-v4-flash-0731": {
+			"id": "deepseek/deepseek-v4-flash-0731",
+			"name": "DeepSeek V4 Flash (0731)",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.08,
+				"output": 0.18,
+				"cacheRead": 0.016,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 384000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
+		},
+		"deepseek/deepseek-v4-flash-latest": {
+			"id": "deepseek/deepseek-v4-flash-latest",
+			"name": "DeepSeek V4 Flash (latest)",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.08,
+				"output": 0.18,
+				"cacheRead": 0.016,
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
