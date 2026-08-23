@@ -966,10 +966,14 @@ export const PROVIDER_REGISTRY_CORE: readonly ProviderRegistryEntry[] = [
     featured: true,
     dashboardUrl: "https://openrouter.ai/keys",
     jawcodeBundle: "openrouter",
-    models: ["anthropic/claude-sonnet-5", ...OPENROUTER_GPT56_MODELS, ...OPENAI_GPT6_MODELS.map(id => `openai/${id}`)],
+    models: ["anthropic/claude-sonnet-5", "deepseek/deepseek-v4-flash-0731", ...OPENROUTER_GPT56_MODELS, ...OPENAI_GPT6_MODELS.map(id => `openai/${id}`)],
     modelContextWindows: {
       "anthropic/claude-sonnet-5": 1_000_000,
+      "deepseek/deepseek-v4-flash-0731": 1_048_576,
       ...OPENROUTER_GPT56_CONTEXT_WINDOWS,
+    },
+    modelInputModalities: {
+      "deepseek/deepseek-v4-flash-0731": ["text"],
     },
     // OpenRouter documents priority support for OpenAI endpoints, but not Anthropic. Keep the
     // provider unclassified and opt in only the exact OpenAI-backed slugs we ship. These facts

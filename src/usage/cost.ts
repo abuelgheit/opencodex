@@ -278,7 +278,7 @@ function resolveMatchedPriceExact(
   const bundled = metadataProvider
     ? getModelMetadata(metadataProvider, modelId)
     : undefined;
-  if (bundled?.cost && validCost4(bundled.cost)) {
+  if (bundled?.cost && validCost4(bundled.cost) && hasNonZeroCost(bundled.cost)) {
     return {
       provider,
       modelId,
@@ -289,20 +289,35 @@ function resolveMatchedPriceExact(
     };
   }
   const overlay = findExpectedPriceOverlay(provider, modelId, overlays);
-  if (!overlay || !validCost4(overlay.cost4) || !hasNonZeroCost(overlay.cost4)) {
-    return options.allowModelLevelFallback === false ? null : resolveModelLevelPrice(provider, modelId);
+  if (overlay && validCost4(overlay.cost4) && hasNonZeroCost(overlay.cost4)) {
+    if (overlay.status === "unverified") return null;
+    return {
+      provider,
+      modelId,
+      ...(metadataProvider ? { jawcodeProvider: metadataProvider } : {}),
+      cost4: overlay.cost4,
+      source: "expected",
+      sourceRef: overlay.source,
+      verifiedAt: overlay.verifiedAt,
+      status: overlay.status,
+    };
   }
-  if (overlay.status === "unverified") return null;
-  return {
-    provider,
-    modelId,
-    ...(metadataProvider ? { jawcodeProvider: metadataProvider } : {}),
-    cost4: overlay.cost4,
-    source: "expected",
-    sourceRef: overlay.source,
-    verifiedAt: overlay.verifiedAt,
-    status: overlay.status,
-  };
+  // An all-zero bundle row is an explicit $0 statement: the catalog knows the
+  // model and says it bills nothing (test "known free"). It is checked after
+  // the overlays because a bundle row of zeros also means "the bundle does not
+  // carry this provider's price" — a paid overlay for the same slug is the more
+  // specific fact and must win, or zai/glm-4.7 would resolve as free.
+  if (bundled?.cost && validCost4(bundled.cost)) {
+    return {
+      provider,
+      modelId,
+      jawcodeProvider: metadataProvider,
+      cost4: bundled.cost,
+      source: "jawcode",
+      status: "verified",
+    };
+  }
+  return options.allowModelLevelFallback === false ? null : resolveModelLevelPrice(provider, modelId);
 }
 
 /** User-configured overlay match; explicit zero rates are authoritative too. */

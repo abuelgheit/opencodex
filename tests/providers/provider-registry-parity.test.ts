@@ -382,15 +382,18 @@ describe("provider registry parity", () => {
   // free is a fact the catalog records, not a gap.
   test("every registered openrouter model has exact cost metadata in the catalog", () => {
     const entry = PROVIDER_REGISTRY.find(provider => provider.id === "openrouter");
-    expect(entry?.models.length).toBe(6);
+    expect(entry?.models.length).toBe(8);
 
     const expectedCosts: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
       "anthropic/claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
-      "stealth/ox-alpha": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      "deepseek/deepseek-v4-flash-0731": { input: 0.08, output: 0.18, cacheRead: 0.016, cacheWrite: 0 },
       "openai/gpt-5.6": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
       "openai/gpt-5.6-sol": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
       "openai/gpt-5.6-terra": { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 3.125 },
       "openai/gpt-5.6-luna": { input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
+      // Upstream replaced the stealth/ox-alpha route with the OpenAI-backed GPT-6 pair.
+      "openai/gpt-6-sol": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+      "openai/gpt-6-luna": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
     };
 
     expect([...entry!.models].sort()).toEqual(Object.keys(expectedCosts).sort());
@@ -406,6 +409,15 @@ describe("provider registry parity", () => {
     }
     // The native openai/gpt-5.6 slug lives in the OPENROUTER bundle, not the openai one.
     expect(getModelMetadata("openrouter", "gpt-5.6")).toBeUndefined();
+    // deepseek/deepseek-v4-flash-0731 must ship its registry context window and reasoning
+    // flag alongside the exact cost row above (regression: model was selectable but unpriced).
+    expect(getModelMetadata("openrouter", "deepseek/deepseek-v4-flash-0731")).toMatchObject({
+      provider: "openrouter",
+      id: "deepseek/deepseek-v4-flash-0731",
+      contextWindow: 1_048_576,
+      maxTokens: 384_000,
+      reasoning: true,
+    });
   });
 
   test("OpenAI API route max-input metadata is trusted and user values only lower it", () => {
