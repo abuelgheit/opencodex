@@ -221,8 +221,14 @@ describe("resolveMatchedPrice", () => {
     expect(price!.cost4.input).toBe(10);
   });
 
-  test("17d. model-level fallback: all-zero everywhere stays null (grok-composer)", () => {
-    expect(resolveMatchedPrice("xai", "grok-composer-2.5-fast")).toBeNull();
+  test("17d. xai grok-composer-2.5-fast: all-zero bundle row is known free", () => {
+    expect(resolveMatchedPrice("xai", "grok-composer-2.5-fast")).toMatchObject({
+      provider: "xai",
+      modelId: "grok-composer-2.5-fast",
+      cost4: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified",
+    });
   });
 
   test("17e. exact provider bundle still beats the model-level fallback", () => {
@@ -264,9 +270,15 @@ describe("resolveMatchedPrice", () => {
     expect(resolveMatchedPrice("openai", "definitely-not-a-model")).toBeNull();
   });
 
-  test("7. all-zero jawcode row with no overlay is null", () => {
-    // kimi -> moonshot / kimi-k2.5 is all-zero in the snapshot (003)
-    expect(resolveMatchedPrice("kimi", "kimi-k2.5", [])).toBeNull();
+  test("7. all-zero jawcode row with no overlay is known free", () => {
+    // kimi -> moonshot / kimi-k2.5 is all-zero in the jawcode bundle
+    expect(resolveMatchedPrice("kimi", "kimi-k2.5", [])).toMatchObject({
+      provider: "kimi",
+      modelId: "kimi-k2.5",
+      cost4: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified",
+    });
   });
 
   test("8. overlay priority: verified wins, unverified never returned", () => {
@@ -323,10 +335,10 @@ describe("resolveMatchedPrice", () => {
   });
 
   // stealth/ox-alpha is registered on openrouter and genuinely free ($0, OpenRouter /api/v1/models).
-  // The catalog records the explicit zero so the metadata is truthful; the estimator's documented
-  // policy treats all-zero rows as "not billable here" rather than inventing a $0 charge, so the
-  // price stays null while getModelMetadata still exposes the free row.
-  test("9c. explicit zero pricing for stealth/ox-alpha: metadata truth, no invented charge", () => {
+  // The jawcode bundle records the explicit zero; resolveMatchedPrice now treats a
+  // validCost4 all-zero entry from the bundled metadata as known free pricing ($0.00),
+  // not as missing data. Overlays with all-zero cost still fall through.
+  test("9c. explicit zero pricing for stealth/ox-alpha: known free, not missing", () => {
     const meta = getModelMetadata("openrouter", "stealth/ox-alpha");
     expect(meta).toMatchObject({
       provider: "openrouter",
@@ -335,7 +347,13 @@ describe("resolveMatchedPrice", () => {
       maxTokens: 131_072,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     });
-    expect(resolveMatchedPrice("openrouter", "stealth/ox-alpha")).toBeNull();
+    expect(resolveMatchedPrice("openrouter", "stealth/ox-alpha")).toMatchObject({
+      provider: "openrouter",
+      modelId: "stealth/ox-alpha",
+      cost4: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified",
+    });
   });
 
   test("16. shipped overlay membership: 70 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {

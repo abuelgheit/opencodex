@@ -624,9 +624,8 @@ describe("summarizeUsage", () => {
         usageStatus: "reported",
         usage: { inputTokens: 100, outputTokens: 10 },
       }),
-      // Explicit-zero free slug: catalog records $0, but the estimator treats zero as "not
-      // billable here" — the row stays unpriced (no invented charge) and the model still
-      // aggregates its tokens.
+      // Explicit-zero free slug: catalog records $0; the jawcode bundle propagates
+      // zero cost as known free pricing, so the row is priced at $0.00.
       entry({
         ts: FIXED_NOW - 2000,
         provider: "openrouter",
@@ -641,13 +640,13 @@ describe("summarizeUsage", () => {
     const gpt56 = byModel["openrouter/openai/gpt-5.6"];
     expect(gpt56).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 110 });
     expect(gpt56.estimatedCostUsd).toBeCloseTo(0.0008, 12);
-    expect(sum.summary.pricedRequests).toBe(1);
-    expect(sum.summary.unpricedRequests).toBe(1);
+    expect(sum.summary.pricedRequests).toBe(2);
+    expect(sum.summary.unpricedRequests).toBe(0);
     expect(sum.summary.estimatedCostUsd).toBeCloseTo(0.0008, 12);
 
     const ox = byModel["openrouter/stealth/ox-alpha"];
     expect(ox).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 55 });
-    expect(ox.estimatedCostUsd).toBeUndefined();
+    expect(ox.estimatedCostUsd).toBe(0);
   });
 
   test("aggregates estimated cost via model-level prices and counts unpriced rows", () => {
