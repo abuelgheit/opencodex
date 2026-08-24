@@ -15,6 +15,7 @@ import {
 } from "./admission-model-scope";
 import { jsonUtf8Bytes } from "../lib/json-byte-size";
 import { sseFieldValue } from "../lib/sse-decoder";
+import { uuidFromHex } from "../lib/prompt-cache-affinity";
 import { enforceAnthropicImageLimits, sniffImageDimensions } from "../adapters/anthropic-image-guard";
 import { normalizeAnthropicImages } from "../adapters/anthropic-image-normalize";
 import { AnthropicRequestError, DesktopModelMappingUnavailableError, anthropicToResponsesTranslation, extractOcxEffortDirective, extractOcxRouteDirective, resolveInboundModel, type ClaudeCacheKeySource } from "../claude/inbound";
@@ -216,12 +217,6 @@ function shouldForwardNativeHeader(name: string, value: string, config: OcxConfi
   if (lowerName !== "authorization" && lowerName !== "x-api-key") return true;
   const token = singleCredentialToken(lowerName, value);
   return !!token && !isProxyAdmissionSecret(token, config);
-}
-
-/** Format a 32-hex cache key as a uuid-shaped session id (version/variant nibbles forced). */
-function uuidFromHex(hex32: string): string {
-  const h = (hex32 + "0".repeat(32)).slice(0, 32);
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
 function anthropicUsageToOcx(usage: Rec | undefined): { inputTokens: number; outputTokens: number; cachedInputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number } | undefined {

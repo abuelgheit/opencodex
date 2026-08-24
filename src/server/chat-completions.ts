@@ -10,6 +10,7 @@ import {
   assertChatCompletionsRoutingBody,
   ChatCompletionsRequestError,
   chatCompletionsToResponsesBody,
+  normalizeChatCompletionsPromptCacheKey,
 } from "../chat/inbound";
 import { normalizeChatImageParts } from "../chat/image-parts";
 import {
@@ -127,6 +128,7 @@ async function handleChatCompletionsWithBudget(
   try {
     const rawBody = await readChatBody(req, translatorBudget, resolveInboundBodyLimitBytes(config.maxInboundBodyBytes));
     assertChatCompletionsRoutingBody(rawBody);
+    normalizeChatCompletionsPromptCacheKey(rawBody);
     // Normalize foreign image shapes BEFORE routing. isNativeChatRouteEligible below
     // decides the pipeline from the image parts it can see, and the native path then
     // forwards this body as-is, so both must observe the same parts. A body with no

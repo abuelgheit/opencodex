@@ -28,6 +28,18 @@ export function assertChatCompletionsRoutingBody(raw: unknown): asserts raw is C
   }
 }
 
+/** Normalize the supported prompt-cache spelling before routing or wire selection. */
+export function normalizeChatCompletionsPromptCacheKey(raw: Rec): void {
+  const snake = raw.prompt_cache_key;
+  const camel = raw.promptCacheKey;
+  delete raw.promptCacheKey;
+  if (typeof snake === "string") {
+    raw.prompt_cache_key = snake;
+  } else if (typeof camel === "string") {
+    raw.prompt_cache_key = camel;
+  }
+}
+
 // "none" is the runtime's disable sentinel, not an unknown value: src/reasoning-effort.ts
 // accepts it and maps it to "omit the reasoning parameter", and the Pi client export maps
 // Pi's "off" thinking level onto it (src/clients/config-export.ts). Dropping it here let a
