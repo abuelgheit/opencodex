@@ -94,6 +94,7 @@ import {
   isCyberPolicyCode,
   isCyberPolicyMessage,
 } from "../../lib/errors";
+import { addPromptCacheSessionAffinity } from "../../lib/prompt-cache-affinity";
 import { injectionDebugLog } from "../../lib/injection-debug-log";
 import { resolveClientRetryAfter } from "../../lib/retry-after";
 import { enrichOpenCodeZenRateLimitMessage } from "../../providers/opencode-zen-rate-limit";
@@ -1266,6 +1267,9 @@ async function retryCodexPoolOnAlternateAccount(
     retryAuthCtx,
     "pool",
   );
+  if (inboundWire === "chat" && isCanonicalOpenAiForwardProvider(retryProvider)) {
+    addPromptCacheSessionAffinity(retryHeaders, parsed.options.promptCacheKey);
+  }
   const retryAdapter = resolveAdapter(
     resolveWireProtocolOverride(route.providerName, route.modelId, retryProvider, inboundWire),
     config.cacheRetention,
@@ -3718,6 +3722,9 @@ async function handleResponsesInner(
     delete route.codexAccountNamespace;
     logCtx.provider = route.providerName;
     delete logCtx.accountLogLabel;
+  }
+  if (inboundWire === "chat" && isCanonicalOpenAiForwardProvider(adapterProvider)) {
+    addPromptCacheSessionAffinity(selectedForwardHeaders, parsed.options.promptCacheKey);
   }
   const adapter = resolveAdapter(adapterProvider, config.cacheRetention);
   bindRouteReasoningReplayScope({

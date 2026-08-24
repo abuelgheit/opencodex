@@ -25,6 +25,18 @@ export function assertChatCompletionsRoutingBody(raw: unknown): asserts raw is C
   }
 }
 
+/** Normalize the supported prompt-cache spelling before routing or wire selection. */
+export function normalizeChatCompletionsPromptCacheKey(raw: Rec): void {
+  const snake = raw.prompt_cache_key;
+  const camel = raw.promptCacheKey;
+  delete raw.promptCacheKey;
+  if (typeof snake === "string") {
+    raw.prompt_cache_key = snake;
+  } else if (typeof camel === "string") {
+    raw.prompt_cache_key = camel;
+  }
+}
+
 const OUTPUT_CONFIG_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
 const OUTPUT_CONFIG_SUMMARIES = new Set(["auto", "concise", "detailed", "none"]);
 

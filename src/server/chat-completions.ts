@@ -10,6 +10,7 @@ import {
   assertChatCompletionsRoutingBody,
   ChatCompletionsRequestError,
   chatCompletionsToResponsesBody,
+  normalizeChatCompletionsPromptCacheKey,
 } from "../chat/inbound";
 import {
   chatCompletionsErrorResponse,
@@ -94,6 +95,7 @@ async function handleChatCompletionsWithBudget(
   try {
     const rawBody = await readChatBody(req, translatorBudget);
     assertChatCompletionsRoutingBody(rawBody);
+    normalizeChatCompletionsPromptCacheKey(rawBody);
     chatBody = rawBody;
   } catch (err) {
     const overflow = isTranslatorBudgetExceededError(err);

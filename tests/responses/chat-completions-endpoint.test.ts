@@ -1208,6 +1208,59 @@ test("chat-native uses the shared request builder and normalized Chat Completion
   }
 });
 
+test("Kilo-shaped Chat requests normalize prompt cache keys on the native wire", async () => {
+  const captured: Array<{ body: Record<string, unknown>; headers: Headers }> = [];
+  const upstream = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      captured.push({ body: await req.json() as Record<string, unknown>, headers: new Headers(req.headers) });
+      return Response.json({
+        id: "chatcmpl_kilo_cache",
+        object: "chat.completion",
+        choices: [{ index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+      });
+    },
+  });
+  saveConfig({
+    port: 0,
+    defaultProvider: "kilo-fixture",
+    providers: {
+      "kilo-fixture": {
+        adapter: "openai-chat",
+        baseUrl: `${upstream.url.toString().replace(/\/$/, "")}/v1`,
+        authMode: "key",
+        apiKey: "kilo-test-key",
+        allowPrivateNetwork: true,
+        promptCacheKey: true,
+      },
+    },
+  } as OcxConfig);
+  const server = startServer(0);
+  try {
+    const response = await fetch(new URL("/v1/chat/completions", server.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "kilo-fixture/test-model",
+        stream: false,
+        promptCacheKey: "camel-key",
+        prompt_cache_key: "snake-key",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.body.prompt_cache_key).toBe("snake-key");
+    expect(captured[0]).not.toHaveProperty("promptCacheKey");
+    expect(captured[0]?.headers.get("session_id")).toBeNull();
+    expect(captured[0]?.headers.get("session-id")).toBeNull();
+  } finally {
+    await server.stop(true);
+    upstream.stop(true);
+  }
+});
+
 test("chat-native preserves caller Chat fields on the upstream wire", async () => {
   const { server: upstream, captured } = mockChatUpstreamCapturing();
   saveConfig(mockConfig(`${upstream.url.toString().replace(/\/$/, "")}/v1`, {

@@ -8,6 +8,7 @@
  */
 import { FORWARD_HEADERS } from "../adapters/openai-responses";
 import { sseFieldValue } from "../lib/sse-decoder";
+import { uuidFromHex } from "../lib/prompt-cache-affinity";
 import { enforceAnthropicImageLimits, sniffImageDimensions } from "../adapters/anthropic-image-guard";
 import { normalizeAnthropicImages } from "../adapters/anthropic-image-normalize";
 import { AnthropicRequestError, anthropicToResponsesTranslation, extractOcxEffortDirective, extractOcxRouteDirective, resolveInboundModel, type ClaudeCacheKeySource } from "../claude/inbound";
@@ -174,12 +175,6 @@ function shouldForwardNativeHeader(name: string, value: string, config: OcxConfi
   if (lowerName !== "authorization" && lowerName !== "x-api-key") return true;
   const token = singleCredentialToken(lowerName, value);
   return !!token && !isProxyAdmissionSecret(token, config);
-}
-
-/** Format a 32-hex cache key as a uuid-shaped session id (version/variant nibbles forced). */
-function uuidFromHex(hex32: string): string {
-  const h = (hex32 + "0".repeat(32)).slice(0, 32);
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
 function anthropicUsageToOcx(usage: Rec | undefined): { inputTokens: number; outputTokens: number; cachedInputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number } | undefined {
@@ -805,7 +800,7 @@ async function handleClaudeMessagesWithBudget(
     // but ONLY for a real per-session key (metadata.user_id). The system-hash fallback
     // key is shared across Desktop conversations, and a shared session_id's backend
     // semantics are unproven (audit 133 R2#3): body prompt_cache_key only there.
-    if (cacheKeySource === "metadata" && !headers.has("session_id") && typeof internalBody.prompt_cache_key === "string") {
+    if (cacheKeySource === "metadata" && !headers.has("session_id") && !headers.has("session-id") && typeof internalBody.prompt_cache_key === "string") {
       headers.set("session_id", uuidFromHex(internalBody.prompt_cache_key));
     }
   }
