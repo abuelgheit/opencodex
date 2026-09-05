@@ -1,0 +1,24 @@
+{
+  "port": 0,
+  "hostname": "0.0.0.0",
+  "defaultProvider": "mock",
+  "providers": {
+    "mock": {
+      "adapter": "openai-chat",
+      "baseUrl": "http://127.0.0.1:1/v1",
+      "apiKey": "k",
+      "allowPrivateNetwork": true,
+      "models": [
+        "test-model"
+      ]
+    }
+  },
+  "apiKeys": [
+    {
+      "id": "catalog-reader",
+      "name": "catalog reader",
+      "key": "ocx_data_catalogreadonly",
+      "createdAt": "2026-08-30T00:00:00.000Z"
+    }
+  ]
+}

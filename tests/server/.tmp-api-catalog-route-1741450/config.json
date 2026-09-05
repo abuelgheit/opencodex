@@ -1,0 +1,36 @@
+{
+  "port": 0,
+  "managementUsageMaxReadBytes": 67108864,
+  "appOwnedMemoryBudgetMb": 256,
+  "hostname": "0.0.0.0",
+  "providers": {
+    "mock": {
+      "adapter": "openai-chat",
+      "baseUrl": "http://127.0.0.1:1/v1",
+      "allowPrivateNetwork": true,
+      "apiKey": "k",
+      "models": [
+        "test-model"
+      ]
+    }
+  },
+  "defaultProvider": "mock",
+  "fastRows": true,
+  "openaiProviderTierVersion": 2,
+  "apiKeys": [
+    {
+      "key": "ocx_data_catalogreadonly",
+      "id": "catalog-reader",
+      "name": "catalog reader",
+      "createdAt": "2026-08-30T00:00:00.000Z"
+    }
+  ],
+  "subagentModels": [
+    "gpt-6-astra",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5"
+  ],
+  "subagentModelsVersion": 1
+}
