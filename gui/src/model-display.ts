@@ -1,10 +1,10 @@
 /**
  * Global model display-name mapping: renders an inline SVG icon for recognized
  * model slugs. Used across all GUI surfaces (dropdowns, tables, badges) so the
- * 5.6 trio is instantly distinguishable. No emoji — Lucide-style SVG only.
+ * recognized models are instantly distinguishable. No emoji — Lucide-style SVG only.
  */
 import { createElement, type ReactNode } from "react";
-import { IconSun, IconGlobe, IconMoon, IconLock } from "./icons";
+import { IconSun, IconGlobe, IconMoon, IconLock, IconStar } from "./icons";
 
 type IconComponent = typeof IconSun;
 
@@ -12,6 +12,7 @@ const MODEL_ICON_MAP: Record<string, IconComponent> = {
   "gpt-5.6-sol": IconSun,
   "gpt-5.6-terra": IconGlobe,
   "gpt-5.6-luna": IconMoon,
+  "gpt-6-astra": IconStar,
   "gpt-daybreak-blue-latest": IconSun,
   "daybreak-blue-latest": IconSun,
   "daybreak-red-latest": IconLock,

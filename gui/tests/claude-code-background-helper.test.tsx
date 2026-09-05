@@ -71,7 +71,8 @@ test("selected background helper keeps the neutral description and hides the nat
 // "[object Object]". These render the options the page actually builds, so
 // reintroducing String() fails here rather than only on screen.
 test("icon-bearing models render their name, never [object Object] (#668)", () => {
-  const slugs = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-daybreak-blue-latest", "daybreak-blue-latest", "daybreak-red-latest"];
+  // Keep every recognized icon-bearing slug in the picker regression set.
+  const slugs = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-daybreak-blue-latest", "daybreak-blue-latest", "daybreak-red-latest"];
   // The closed picker renders only the SELECTED option, so assert per slug.
   for (const slug of slugs) {
     const html = renderToStaticMarkup(
@@ -87,6 +88,26 @@ test("icon-bearing models render their name, never [object Object] (#668)", () =
     expect(html).toContain(slug);
     expect(html).toContain("<svg");
   }
+});
+
+// Verify Astra keeps its star identity and safe fallback behavior across labels.
+test("Astra uses the decorative star identity for bare and provider-prefixed slugs", () => {
+  // Render Astra without a provider prefix.
+  const bare = renderToStaticMarkup(modelLabel("gpt-6-astra"));
+  // Render Astra with the supported provider prefix.
+  const prefixed = renderToStaticMarkup(modelLabel("opencodex/gpt-6-astra"));
+  // Resolve an unrecognized model through the plain-string fallback.
+  const unknown = modelLabel("unknown-model");
+  // Keep the shared IconStar path expectation exact.
+  const expectedStarPath = '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>';
+
+  expect(bare).toContain("gpt-6-astra");
+  expect(prefixed).toContain("opencodex/gpt-6-astra");
+  for (const html of [bare, prefixed]) {
+    expect(html).toContain(expectedStarPath);
+    expect(html).toContain('aria-hidden="true"');
+  }
+  expect(unknown).toBe("unknown-model");
 });
 
 test("Daybreak Red uses a cyber lock rather than the Blue solar identity", () => {
