@@ -59,6 +59,19 @@ export interface UsageDay {
   models: UsageDayModel[];
 }
 
+/** One local-clock hour in the current day, used by the dashboard's Today chart. */
+export interface UsageHour {
+  date: string;
+  hour: number;
+  requests: number;
+  measuredRequests: number;
+  reportedRequests: number;
+  totalTokens: number;
+  inputTokens: number;
+  cacheReadInputTokens: number;
+  models: UsageDayModel[];
+}
+
 export interface UsageDayModel {
   model: string;
   provider: string;
@@ -73,19 +86,6 @@ export interface UsageDayModel {
   cacheCreationInputTokens?: number;
   cacheHitRate?: number | null;
   estimatedCostUsd?: number;
-}
-
-/** One local-clock hour in the current day, used by the dashboard's Today chart. */
-export interface UsageHour {
-  date: string;
-  hour: number;
-  requests: number;
-  measuredRequests: number;
-  reportedRequests: number;
-  totalTokens: number;
-  inputTokens: number;
-  cacheReadInputTokens: number;
-  models: UsageDayModel[];
 }
 
 export interface UsageModel {

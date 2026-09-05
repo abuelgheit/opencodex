@@ -534,53 +534,6 @@ describe("GET /api/usage", () => {
     }
   });
 
-  test("range=today returns only entries from the current local day", async () => {
-    const now = Date.now();
-    const todayMidnight = new Date(now);
-    todayMidnight.setHours(0, 0, 0, 0);
-    const lines = [
-      JSON.stringify({
-        requestId: "ocx-yesterday",
-        timestamp: todayMidnight.getTime() - 1,
-        provider: "openai",
-        model: "gpt-5.5",
-        status: 200,
-        durationMs: 10,
-        usageStatus: "reported",
-        usage: { inputTokens: 100, outputTokens: 50 },
-        totalTokens: 150,
-      }),
-      JSON.stringify({
-        requestId: "ocx-today",
-        timestamp: todayMidnight.getTime() + 1,
-        provider: "openai",
-        model: "gpt-5.5",
-        status: 200,
-        durationMs: 10,
-        usageStatus: "reported",
-        usage: { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 4 },
-        totalTokens: 15,
-      }),
-    ];
-    writeFileSync(join(testDir, "usage.jsonl"), `${lines.join("\n")}\n`, { mode: 0o600 });
-    const nowSpy = spyOn(Date, "now").mockReturnValue(now);
-    const server = startServer(0);
-    try {
-      const res = await fetch(new URL("/api/usage?range=today", server.url));
-      const body = await res.json();
-      expect(body.range).toBe("today");
-      expect(body.summary).toMatchObject({ requests: 1, totalTokens: 15 });
-      expect(body.days).toHaveLength(1);
-      expect(body.days[0]).toMatchObject({ inputTokens: 10, cacheReadInputTokens: 4 });
-      expect(body.hours).toHaveLength(24);
-      expect(body.hours.find((hour: { requests: number }) => hour.requests === 1))
-        .toMatchObject({ totalTokens: 15, inputTokens: 10, cacheReadInputTokens: 4 });
-    } finally {
-      await server.stop(true);
-      nowSpy.mockRestore();
-    }
-  });
-
   test("default range is 30d and includes the older entry", async () => {
     writeFixture(Date.now());
     const server = startServer(0);
@@ -610,9 +563,35 @@ describe("GET /api/usage", () => {
     }
   });
 
-  test("today narrows the window to the current local day", async () => {
+  test("today narrows the window and returns cache-aware hourly buckets", async () => {
     const now = Date.now();
-    writeFixture(now);
+    const todayMidnight = new Date(now);
+    todayMidnight.setHours(0, 0, 0, 0);
+    const rows = [
+      {
+        requestId: "ocx-yesterday",
+        timestamp: todayMidnight.getTime() - 1,
+        provider: "openai",
+        model: "gpt-5.5",
+        status: 200,
+        durationMs: 10,
+        usageStatus: "reported",
+        usage: { inputTokens: 100, outputTokens: 50 },
+        totalTokens: 150,
+      },
+      {
+        requestId: "ocx-today",
+        timestamp: todayMidnight.getTime() + 1,
+        provider: "openai",
+        model: "gpt-5.5",
+        status: 200,
+        durationMs: 10,
+        usageStatus: "reported",
+        usage: { inputTokens: 10, outputTokens: 5, cacheReadInputTokens: 4 },
+        totalTokens: 15,
+      },
+    ];
+    writeFileSync(join(testDir, "usage.jsonl"), `${rows.map(row => JSON.stringify(row)).join("\n")}\n`, { mode: 0o600 });
     const server = startServer(0);
     try {
       const body = await fetch(new URL("/api/usage?range=today", server.url)).then(res => res.json());
@@ -620,7 +599,12 @@ describe("GET /api/usage", () => {
       // A range that missed its rangeWindow branch would fall through to the
       // all-history window and report since: null while looking plausible.
       expect(body.since).not.toBeNull();
+      expect(body.summary).toMatchObject({ requests: 1, totalTokens: 15 });
       expect(body.days).toHaveLength(1);
+      expect(body.days[0]).toMatchObject({ inputTokens: 10, cacheReadInputTokens: 4 });
+      expect(body.hours).toHaveLength(24);
+      expect(body.hours.find((hour: { requests: number }) => hour.requests === 1))
+        .toMatchObject({ totalTokens: 15, inputTokens: 10, cacheReadInputTokens: 4 });
       const thirtyDay = await fetch(new URL("/api/usage?range=30d", server.url)).then(res => res.json());
       expect(body.summary.requests).toBeLessThan(thirtyDay.summary.requests);
     } finally {
@@ -805,6 +789,7 @@ describe("GET /api/usage", () => {
       const body = await res.json();
       expect(body.surface).toBe("claude");
       expect(body.summary.requests).toBe(0);
+      expect(body.hours).toEqual([]);
       expect(body.accounts).toEqual([]);
       expect(body.error).toBe("read_failed");
     } finally {

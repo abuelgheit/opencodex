@@ -87,6 +87,7 @@ import {
   targetKey,
 } from "../../combos";
 import { isInjectionDebugEnabled } from "../../lib/debug-settings";
+import { addPromptCacheSessionAffinity } from "../../lib/prompt-cache-affinity";
 import {
   CYBER_POLICY_ERROR_CODE,
   CYBER_POLICY_FALLBACK_MESSAGE,
@@ -94,7 +95,6 @@ import {
   isCyberPolicyCode,
   isCyberPolicyMessage,
 } from "../../lib/errors";
-import { addPromptCacheSessionAffinity } from "../../lib/prompt-cache-affinity";
 import { injectionDebugLog } from "../../lib/injection-debug-log";
 import { resolveClientRetryAfter } from "../../lib/retry-after";
 import { enrichOpenCodeZenRateLimitMessage } from "../../providers/opencode-zen-rate-limit";

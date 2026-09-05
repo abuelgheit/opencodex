@@ -70444,31 +70444,6 @@
 			"contextWindow": 131072,
 			"maxTokens": 16384
 		},
-		"stealth/ox-alpha": {
-			"id": "stealth/ox-alpha",
-			"name": "Ox Alpha",
-			"api": "openai-completions",
-			"provider": "openrouter",
-			"baseUrl": "https://openrouter.ai/api/v1",
-			"reasoning": true,
-			"input": [
-				"text",
-				"image"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 1048576,
-			"maxTokens": 131072,
-			"thinking": {
-				"mode": "effort",
-				"minLevel": "low",
-				"maxLevel": "max"
-			}
-		},
 		"stepfun/step-3.5-flash": {
 			"id": "stepfun/step-3.5-flash",
 			"name": "Step 3.5 Flash",

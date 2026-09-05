@@ -613,7 +613,7 @@ describe("parseUsageSurface", () => {
 });
 
 describe("summarizeUsage", () => {
-  test("propagates openrouter cost estimates and explicit-free rows to models[]", () => {
+  test("propagates OpenRouter GPT-5.6 cost estimates to models[]", () => {
     const entries: PersistedUsageEntry[] = [
       // Billable registered slug: openrouter/openai/gpt-5.6 resolves via the openrouter bundle
       // at 5/30/0.5/6.25 -> (100*5 + 10*30)/1e6 = 0.0008.
@@ -624,15 +624,6 @@ describe("summarizeUsage", () => {
         usageStatus: "reported",
         usage: { inputTokens: 100, outputTokens: 10 },
       }),
-      // Explicit-zero free slug: catalog records $0; the jawcode bundle propagates
-      // zero cost as known free pricing, so the row is priced at $0.00.
-      entry({
-        ts: FIXED_NOW - 2000,
-        provider: "openrouter",
-        model: "stealth/ox-alpha",
-        usageStatus: "reported",
-        usage: { inputTokens: 50, outputTokens: 5 },
-      }),
     ];
     const sum = summarizeUsage(entries, "30d", FIXED_NOW);
     const byModel = Object.fromEntries(sum.models.map(m => [`${m.provider}/${m.model}`, m]));
@@ -640,13 +631,9 @@ describe("summarizeUsage", () => {
     const gpt56 = byModel["openrouter/openai/gpt-5.6"];
     expect(gpt56).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 110 });
     expect(gpt56.estimatedCostUsd).toBeCloseTo(0.0008, 12);
-    expect(sum.summary.pricedRequests).toBe(2);
+    expect(sum.summary.pricedRequests).toBe(1);
     expect(sum.summary.unpricedRequests).toBe(0);
     expect(sum.summary.estimatedCostUsd).toBeCloseTo(0.0008, 12);
-
-    const ox = byModel["openrouter/stealth/ox-alpha"];
-    expect(ox).toMatchObject({ provider: "openrouter", requests: 1, totalTokens: 55 });
-    expect(ox.estimatedCostUsd).toBe(0);
   });
 
   // deepseek/deepseek-v4-flash-0731 bills on OpenRouter at 0.08/0.18/0.016/0 per million.

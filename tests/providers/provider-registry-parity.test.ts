@@ -155,16 +155,14 @@ describe("provider registry parity", () => {
   });
   // Registry-to-cost-metadata parity for the openrouter entry: every model the picker can route
   // must have a cost row in the vendored catalog, resolved by exact native id (no vendor-prefix
-  // fallback). Regression: `stealth/ox-alpha` and `openai/gpt-5.6` were registered but absent from
-  // the snapshot, so their usage rows had no price. Explicit zero pricing is still a cost row —
-  // free is a fact the catalog records, not a gap.
+  // fallback). Regression: registered OpenRouter slugs were absent from the snapshot, so their
+  // usage rows had no price.
   test("every registered openrouter model has exact cost metadata in the catalog", () => {
     const entry = PROVIDER_REGISTRY.find(provider => provider.id === "openrouter");
-    expect(entry?.models.length).toBe(7);
+    expect(entry?.models.length).toBe(6);
 
     const expectedCosts: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
       "anthropic/claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
-      "stealth/ox-alpha": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       "deepseek/deepseek-v4-flash-0731": { input: 0.08, output: 0.18, cacheRead: 0.016, cacheWrite: 0 },
       "openai/gpt-5.6": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
       "openai/gpt-5.6-sol": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },

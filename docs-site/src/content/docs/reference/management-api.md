@@ -172,16 +172,16 @@ re-estimated from the pricing active when the summary is read. This is an API-eq
 not a subscription charge. New main-pool requests use the reserved `main` label; legacy bare
 `openai` rows remain in an ambiguous bucket instead of being reassigned from current configuration.
 
+For `range=today`, the response also includes `hours`: 24 zero-filled local-clock buckets for the
+current day. Each daily or hourly bucket includes `inputTokens` and `cacheReadInputTokens` so
+clients can calculate and display cache-hit percentages, along with the request, total-token, and
+per-model breakdown fields. Other ranges return `hours: []`.
+
 Rows in `models`, `providers`, and `days[].models` also carry `cacheHitRate`: the share of input
 tokens served from the provider's prompt cache, clamped to `[0, 1]`. It is `null` — never `0` —
 when the provider reported no cache telemetry or the row has no input tokens, because "no cache
 data" and "a genuine 0% hit rate" are different facts and a chart that renders them alike is
 misleading.
-
-For `range=today`, the response also includes `hours`: 24 zero-filled local-clock buckets for the
-current day. Each daily or hourly bucket includes `inputTokens` and `cacheReadInputTokens` so
-clients can calculate and display cache-hit percentages, along with the request, total-token, and
-per-model breakdown fields. Other ranges return `hours: []`.
 
 :::caution
 Storage cleanup endpoints can move or permanently remove archived session data. Always preview

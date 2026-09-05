@@ -1771,9 +1771,7 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
       "deepseek/deepseek-v4-flash-0731": 1_048_576,
       ...OPENROUTER_GPT56_CONTEXT_WINDOWS,
     },
-    modelInputModalities: {
-      "deepseek/deepseek-v4-flash-0731": ["text"],
-    },
+    modelInputModalities: { "deepseek/deepseek-v4-flash-0731": ["text"] },
     // OpenRouter documents priority support for OpenAI endpoints, but not Anthropic. Keep the
     // provider unclassified and opt in only the exact OpenAI-backed slugs we ship. These facts
     // belong only to the canonical destination; a same-named custom gateway is unknown to us.

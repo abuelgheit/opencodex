@@ -334,28 +334,6 @@ describe("resolveMatchedPrice", () => {
     expect(resolveMatchedPrice("openrouter", "openai-gpt-5.6")).toBeNull();
   });
 
-  // stealth/ox-alpha is registered on openrouter and genuinely free ($0, OpenRouter /api/v1/models).
-  // The jawcode bundle records the explicit zero; resolveMatchedPrice now treats a
-  // validCost4 all-zero entry from the bundled metadata as known free pricing ($0.00),
-  // not as missing data. Overlays with all-zero cost still fall through.
-  test("9c. explicit zero pricing for stealth/ox-alpha: known free, not missing", () => {
-    const meta = getModelMetadata("openrouter", "stealth/ox-alpha");
-    expect(meta).toMatchObject({
-      provider: "openrouter",
-      id: "stealth/ox-alpha",
-      contextWindow: 1_048_576,
-      maxTokens: 131_072,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    });
-    expect(resolveMatchedPrice("openrouter", "stealth/ox-alpha")).toMatchObject({
-      provider: "openrouter",
-      modelId: "stealth/ox-alpha",
-      cost4: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      source: "jawcode",
-      status: "verified",
-    });
-  });
-
   // deepseek/deepseek-v4-flash-0731 ships on OpenRouter at verified per-million rates
   // (0.08 in / 0.18 out / 0.016 cache read / 0 cache write). Its metadata row must resolve
   // from the OPENROUTER bundle itself by exact native slug — never a vendor-prefix strip
