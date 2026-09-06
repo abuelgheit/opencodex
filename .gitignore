@@ -66,3 +66,4 @@ tests/**/.tmp-*
 # `git add` three separate times and reached `dev` once — see
 # tests/ci-workflows/repo-hygiene.test.ts, which fails if any path here becomes tracked again.
 go/
+.kilo

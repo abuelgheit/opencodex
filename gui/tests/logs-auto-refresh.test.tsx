@@ -185,6 +185,16 @@ test("Logs: renders the ordered ten-column layout schema", async () => {
     "logs-col-request",
     "logs-col-duration",
   ]);
+  expect(container.querySelector(".logs-table tbody td.log-col-duration")?.textContent).toBe("0.042s");
+  expect(container.textContent).not.toContain("42ms");
+
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>(".log-detail-btn")!.click();
+  });
+  // The selected request's performance section must use the same seconds formatter.
+  const performance = container.querySelector('[aria-labelledby="log-detail-performance"]');
+  expect(performance?.textContent).toContain("0.042s");
+  expect(performance?.textContent).not.toContain("42ms");
 
   await act(async () => { root.unmount(); });
 });
@@ -482,6 +492,12 @@ test("Logs: attempt details render exact reasoning wire values without legacy pl
 
   const rows = [...container.querySelectorAll<HTMLTableRowElement>(".log-detail-attempts tbody tr")];
   expect(rows).toHaveLength(3);
+  expect(rows[0]?.textContent).toContain("0.01s");
+  expect(rows[0]?.textContent).not.toContain("10ms");
+  expect(rows[1]?.textContent).toContain("0.011s");
+  expect(rows[1]?.textContent).not.toContain("11ms");
+  expect(rows[2]?.textContent).toContain("0.012s");
+  expect(rows[2]?.textContent).not.toContain("12ms");
   expect(rows[0]?.textContent).toContain("minimal → low (thinking_budget=0)");
   expect(rows[1]?.textContent).toContain("high → enabled (thinking.type=enabled)");
   expect(rows[2]?.textContent).toContain("legacy-model");
