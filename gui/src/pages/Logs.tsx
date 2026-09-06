@@ -295,6 +295,15 @@ function formatTokPerSecond(result: TokPerSecondResult | undefined, localeTag?: 
   return `${result.estimated ? "~" : ""}${value}`;
 }
 
+/** Format a duration in milliseconds as a locale-aware seconds value. */
+function formatDurationSeconds(durationMs: number, localeTag?: string): string {
+  const value = new Intl.NumberFormat(localeTag, {
+    maximumFractionDigits: 3,
+    minimumFractionDigits: 0,
+  }).format(durationMs / 1_000);
+  return `${value}s`;
+}
+
 const LOGS_POLL_INTERVAL_MS = 2000;
 // Relative time filters must advance even when the polled snapshot is unchanged. Keep the
 // refresh independent from the network poll so an active 15m/1h/24h window expires rows while
@@ -1000,7 +1009,7 @@ export default function Logs({ apiBase }: { apiBase: string }) {
                     </span>
                  </td>
                   <td className="muted mono"><span className="log-reqid" title={log.requestId}>{log.requestId ?? "-"}</span></td>
-                 <td className="num log-col-duration">{log.durationMs}ms</td>
+                  <td className="num log-col-duration">{formatDurationSeconds(log.durationMs, localeTag)}</td>
                 </tr>
                 );
               })}
@@ -1203,7 +1212,7 @@ function LogDetailDialog({
         <section className="log-detail-section" aria-labelledby="log-detail-performance">
           <h4 id="log-detail-performance" className="log-detail-section-title">{t("logs.detail.section.performance")}</h4>
           <div className="log-detail-grid">
-            <span className="muted">{t("logs.col.duration")}</span><span className="mono">{detail.durationMs}ms</span>
+            <span className="muted">{t("logs.col.duration")}</span><span className="mono">{formatDurationSeconds(detail.durationMs, localeTag)}</span>
             <span className="muted">{t("logs.col.tokPerSec")}</span><span className="mono">{formatTokPerSecond(detail.displayMetrics?.tokPerSecond, localeTag)}</span>
             {detail.displayMetrics?.decodeTokPerSecond?.kind === "value" && (
               <><span className="muted">{t("logs.detail.decodeTokPerSec")}</span><span className="mono">{formatTokPerSecond(detail.displayMetrics.decodeTokPerSecond, localeTag)}</span></>
@@ -1309,7 +1318,7 @@ function LogDetailDialog({
                           </>
                         )}
                       </td>
-                      <td className="num mono">{attempt.durationMs}ms</td>
+                      <td className="num mono">{formatDurationSeconds(attempt.durationMs, localeTag)}</td>
                       <td className="num mono">
                         {formatTokPerSecond(attempt.displayMetrics?.tokPerSecond, localeTag)}
                         {/* #4038: the DTO already carries a per-attempt decode rate measured on
