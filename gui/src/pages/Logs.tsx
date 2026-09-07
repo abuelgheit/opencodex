@@ -205,6 +205,17 @@ function displayTokenTotal(log: LogEntry): number | undefined {
   return typeof explicitTotal === "number" ? Math.max(explicitTotal, baseTotal) : baseTotal;
 }
 
+/** Format the cache-read share of inclusive input tokens for one log row. */
+function cacheHitPercentage(log: LogEntry): string {
+  if (!log.usage) return "—";
+  const { read } = cacheSplit(log);
+  const input = log.usage.inputTokens;
+  if (read === undefined || !Number.isFinite(input) || input <= 0) return "—";
+  const ratio = read / input;
+  if (!Number.isFinite(ratio)) return "—";
+  return `${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%`;
+}
+
 /**
  * Row/detail display total that also honors an absolute context checkpoint.
  *
@@ -731,6 +742,7 @@ export default function Logs({ apiBase }: { apiBase: string }) {
             <colgroup>
               <col className="logs-col-time" />
               <col className="logs-col-tokens" />
+              <col className="logs-col-cache-hit" />
               <col className="logs-col-rate" />
               <col className="logs-col-cost" />
               <col className="logs-col-model" />
@@ -744,7 +756,8 @@ export default function Logs({ apiBase }: { apiBase: string }) {
              <tr>
                <th>{t("logs.col.time")}</th>
                 <th className="num log-col-tokens">{t("logs.col.tokens")}</th>
-                <th className="num log-col-rate" title={t("logs.metric.tokPerSecTitle")}>{t("logs.col.tokPerSec")}</th>
+                 <th className="num logs-col-cache-hit" title={t("logs.metric.cacheHitTitle")}>{t("logs.col.cacheHit")}</th>
+                 <th className="num log-col-rate" title={t("logs.metric.tokPerSecTitle")}>{t("logs.col.tokPerSec")}</th>
                 <th className="num log-col-cost" title={t("logs.metric.estimatedCostTitle")}>{t("logs.col.estimatedCost")}</th>
                <th className="log-col-model">{t("logs.col.model")}</th>
                <th>{t("logs.col.effort")}</th>
@@ -757,7 +770,7 @@ export default function Logs({ apiBase }: { apiBase: string }) {
             <tbody>
               {paddingTop > 0 && (
                 <tr>
-                  <td colSpan={10} className="logs-virtual-spacer" style={{ height: paddingTop }} />
+                  <td colSpan={11} className="logs-virtual-spacer" style={{ height: paddingTop }} />
                 </tr>
               )}
               {virtualRows.map(virtualRow => {
@@ -804,7 +817,10 @@ export default function Logs({ apiBase }: { apiBase: string }) {
                         : <span className="muted">{t(`logs.tokens.${log.usageStatus ?? "unreported"}`)}</span>;
                     })()}
                   </td>
-                  <td className="num mono log-col-rate">
+                   <td className="num mono logs-col-cache-hit">
+                     {cacheHitPercentage(log)}
+                   </td>
+                   <td className="num mono log-col-rate">
                     {formatTokPerSecond(log.displayMetrics?.tokPerSecond, localeTag)}
                   </td>
                   <td className="num mono log-col-cost">
@@ -854,7 +870,7 @@ export default function Logs({ apiBase }: { apiBase: string }) {
               })}
               {paddingBottom > 0 && (
                 <tr>
-                  <td colSpan={10} className="logs-virtual-spacer" style={{ height: paddingBottom }} />
+                  <td colSpan={11} className="logs-virtual-spacer" style={{ height: paddingBottom }} />
                 </tr>
               )}
             </tbody>

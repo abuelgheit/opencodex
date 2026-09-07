@@ -19,7 +19,7 @@ const sampleLog = {
   status: 200,
   durationMs: 42,
   usageStatus: "reported",
-  usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+  usage: { inputTokens: 100, outputTokens: 5, totalTokens: 105, cacheReadInputTokens: 75 },
   displayMetrics: {
     tokPerSecond: { kind: "unavailable", reason: "invalid_duration" },
     cost: { kind: "unavailable", reason: "price_unmatched" },
@@ -162,7 +162,7 @@ function expectTableLoaded(container: HTMLElement, model: string): void {
   expect(container.textContent).toContain(model);
 }
 
-test("Logs: renders the ordered ten-column layout schema", async () => {
+test("Logs: renders the ordered eleven-column layout schema and cache-hit percentage", async () => {
   globalThis.fetch = (async (input) => {
     if (!String(input).includes("/api/logs")) return new Response(null, { status: 404 });
     return jsonResponse([sampleLog]);
@@ -176,6 +176,7 @@ test("Logs: renders the ordered ten-column layout schema", async () => {
   expect([...colgroup!.children].map(column => column.className)).toEqual([
     "logs-col-time",
     "logs-col-tokens",
+    "logs-col-cache-hit",
     "logs-col-rate",
     "logs-col-cost",
     "logs-col-model",
@@ -185,6 +186,7 @@ test("Logs: renders the ordered ten-column layout schema", async () => {
     "logs-col-request",
     "logs-col-duration",
   ]);
+  expect(container.querySelector(".logs-table tbody td.logs-col-cache-hit")?.textContent).toBe("75%");
   expect(container.querySelector(".logs-table tbody td.log-col-duration")?.textContent).toBe("0.042s");
   expect(container.textContent).not.toContain("42ms");
 
@@ -195,6 +197,50 @@ test("Logs: renders the ordered ten-column layout schema", async () => {
   const performance = container.querySelector('[aria-labelledby="log-detail-performance"]');
   expect(performance?.textContent).toContain("0.042s");
   expect(performance?.textContent).not.toContain("42ms");
+
+  await act(async () => { root.unmount(); });
+});
+
+test("Logs: virtual spacers span all eleven columns", async () => {
+  // Enough uniquely keyed rows force the virtualizer to render a spacer around the viewport.
+  const spacerRows = Array.from({ length: 100 }, (_, index) => ({
+    ...sampleLog,
+    requestId: `spacer-${index}`,
+    timestamp: sampleLog.timestamp + index,
+  }));
+  globalThis.fetch = (async (input) => {
+    if (!String(input).includes("/api/logs")) return new Response(null, { status: 404 });
+    return jsonResponse(spacerRows);
+  }) as typeof fetch;
+
+  const { root, container } = await mountLogs();
+  await flushMicrotasks();
+
+  const spacers = [...container.querySelectorAll<HTMLTableCellElement>(".logs-virtual-spacer")];
+  expect(spacers.length).toBeGreaterThan(0);
+  expect(spacers.every(spacer => spacer.colSpan === 11)).toBe(true);
+
+  await act(async () => { root.unmount(); });
+});
+
+test("Logs: cache-hit percentage handles rounded, zero, missing, and over-reported reads", async () => {
+  const rows = [
+    { ...sampleLog, requestId: "rounded", usage: { ...sampleLog.usage, inputTokens: 3, cacheReadInputTokens: 1 } },
+    { ...sampleLog, requestId: "zero", usage: { ...sampleLog.usage, inputTokens: 100, cacheReadInputTokens: 0 } },
+    { ...sampleLog, requestId: "missing", usage: { ...sampleLog.usage, inputTokens: 100, cacheReadInputTokens: undefined } },
+    { ...sampleLog, requestId: "over", usage: { ...sampleLog.usage, inputTokens: 100, cacheReadInputTokens: 120 } },
+  ];
+  globalThis.fetch = (async (input) => {
+    if (!String(input).includes("/api/logs")) return new Response(null, { status: 404 });
+    return jsonResponse(rows);
+  }) as typeof fetch;
+
+  const { root, container } = await mountLogs();
+  await flushMicrotasks();
+
+  const percentages = [...container.querySelectorAll(".logs-table tbody td.logs-col-cache-hit")].map(cell => cell.textContent);
+  expect(percentages).toEqual(["100%", "—", "0%", "33%"]);
+  expect(container.querySelector(".logs-table tbody td.log-col-duration")?.textContent).toBe("0.042s");
 
   await act(async () => { root.unmount(); });
 });

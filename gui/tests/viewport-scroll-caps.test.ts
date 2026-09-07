@@ -32,18 +32,19 @@ test("the log table caps its scroll height against the dynamic viewport", async 
   expect(wrap).not.toMatch(/max-height:\s*calc\(\s*100vh\s*-/);
 });
 
-test("the virtualized log table keeps a fixed ten-column layout", async () => {
+test("the virtualized log table keeps a fixed eleven-column layout", async () => {
   const css = withoutComments(await Bun.file(cssUrl).text());
   const columns = [
-    ["time", 12],
+    ["time", 10],
     ["tokens", 9],
+    ["cache-hit", 8],
     ["rate", 7],
     ["cost", 8],
-    ["model", 15],
+    ["model", 13],
     ["effort", 9],
-    ["provider", 13],
+    ["provider", 11],
     ["status", 8],
-    ["request", 11],
+    ["request", 9],
     ["duration", 8],
   ] as const;
 
@@ -54,8 +55,9 @@ test("the virtualized log table keeps a fixed ten-column layout", async () => {
     expect(width).toBe(`${expectedWidth}%`);
     return Number(width.slice(0, -1));
   });
-  expect(widths).toHaveLength(10);
+  expect(widths).toHaveLength(11);
   expect(widths.reduce((total, width) => total + width, 0)).toBe(100);
+  expect(effectiveDeclaration(css, "table.logs-table", "min-width")).toBe("1180px");
 
   expect(effectiveDeclaration(css, ".logs-table-wrap", "overflow-anchor")).toBe("none");
   expect(effectiveDeclaration(css, ".logs-table-wrap", "scrollbar-gutter")).toBe("stable");
