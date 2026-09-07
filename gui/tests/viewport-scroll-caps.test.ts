@@ -44,8 +44,8 @@ test("the virtualized log table keeps a fixed eleven-column layout", async () =>
     ["effort", 9],
     ["provider", 11],
     ["status", 8],
-    ["request", 9],
     ["duration", 8],
+    ["request", 9],
   ] as const;
 
   expect(effectiveDeclaration(css, "table.logs-table", "table-layout")).toBe("fixed");
@@ -57,10 +57,27 @@ test("the virtualized log table keeps a fixed eleven-column layout", async () =>
   });
   expect(widths).toHaveLength(11);
   expect(widths.reduce((total, width) => total + width, 0)).toBe(100);
-  expect(effectiveDeclaration(css, "table.logs-table", "min-width")).toBe("1180px");
+  expect(effectiveDeclaration(css, "table.logs-table", "width")).toBe("100%");
+  expect(effectiveDeclaration(css, "table.logs-table", "max-width")).toBe("100%");
+  expect(effectiveDeclaration(css, "table.logs-table", "min-width")).toBe("0");
+  // The fixed table must fit structurally; the former positive pixel minimum is forbidden.
+  expect(css).not.toMatch(/table\.logs-table[^\{]*\{[^}]*min-width\s*:\s*(?:[1-9]\d*|0\.[1-9])px/i);
 
+  expect(effectiveDeclaration(css, ".logs-table-wrap", "overflow-x")).toBe("hidden");
+  expect(effectiveDeclaration(css, ".logs-table-wrap", "overflow-y")).toBe("auto");
   expect(effectiveDeclaration(css, ".logs-table-wrap", "overflow-anchor")).toBe("none");
   expect(effectiveDeclaration(css, ".logs-table-wrap", "scrollbar-gutter")).toBe("stable");
+  // These content minimums previously defeated the percentage allocation at narrow widths.
+  expect(css).not.toMatch(/\.log-col-tokens\s*\{[^}]*min-width/i);
+  expect(css).not.toMatch(/\.logs-table \.logs-col-cache-hit\s*\{[^}]*min-width/i);
+  expect(css).not.toMatch(/\.log-col-rate\s*\{[^}]*min-width/i);
+  expect(css).not.toMatch(/\.log-col-cost\s*\{[^}]*min-width/i);
+  // Numeric nowrap is limited to body cells so localized headers can wrap in their columns.
+  expect(css).toMatch(/\.logs-table tbody td\.logs-col-cache-hit[^}]*white-space\s*:\s*nowrap/i);
+  expect(css).toMatch(/\.logs-table tbody td\.log-col-rate[^}]*white-space\s*:\s*nowrap/i);
+  expect(css).toMatch(/\.logs-table tbody td\.log-col-cost[^}]*white-space\s*:\s*nowrap/i);
+  expect(css).toMatch(/\.logs-table tbody td\.log-col-duration[^}]*white-space\s*:\s*nowrap/i);
+  expect(effectiveDeclaration(css, ".logs-table thead th", "white-space")).toBe("normal");
 });
 
 test("the toast width cap outranks the later .notice rule", async () => {
