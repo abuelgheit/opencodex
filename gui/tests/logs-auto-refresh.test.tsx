@@ -183,9 +183,23 @@ test("Logs: renders the ordered eleven-column layout schema and cache-hit percen
     "logs-col-effort",
     "logs-col-provider",
     "logs-col-status",
-    "logs-col-request",
     "logs-col-duration",
+    "logs-col-request",
   ]);
+  // The rendered header contract mirrors the colgroup so values cannot drift under the wrong label.
+  const headerCells = [...container.querySelectorAll<HTMLTableCellElement>(".logs-table thead th")];
+  expect(headerCells).toHaveLength(11);
+  expect(headerCells.slice(-3).map(cell => cell.textContent?.trim())).toEqual(["Status", "Duration", "Request"]);
+  // Select a data row rather than either virtual spacer row for cell alignment assertions.
+  const dataRow = [...container.querySelectorAll<HTMLTableRowElement>(".logs-table tbody tr")]
+    .find(row => row.querySelector(".log-status-cell"));
+  expect(dataRow).not.toBeUndefined();
+  const dataCells = [...dataRow!.cells];
+  expect(dataCells).toHaveLength(11);
+  expect(dataCells.slice(-3).map(cell => cell.textContent?.trim())).toEqual(["200Details", "0.042s", "req-1"]);
+  expect(dataCells[9]?.classList.contains("log-col-duration")).toBe(true);
+  expect(dataCells[9]?.textContent?.trim()).toBe("0.042s");
+  expect(dataCells[10]?.querySelector(".log-reqid")?.getAttribute("title")).toBe("req-1");
   expect(container.querySelector(".logs-table tbody td.logs-col-cache-hit")?.textContent).toBe("75%");
   expect(container.querySelector(".logs-table tbody td.log-col-duration")?.textContent).toBe("0.042s");
   expect(container.textContent).not.toContain("42ms");

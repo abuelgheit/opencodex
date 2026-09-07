@@ -2092,17 +2092,21 @@ dialog.modal-overlay::backdrop {
   max-width: 1200px;
 }
 
-/* Logs table column tuning: model narrower (two-line OK), tokens wider */
+/* Logs table column tuning: model narrower (two-line OK), tokens wider. */
 .log-col-model { max-width: 16ch; overflow-wrap: break-word; word-break: normal; }
-.log-col-tokens { min-width: 10ch; }
 .log-col-time {
   white-space: nowrap;
   vertical-align: middle;
 }
-.log-col-duration { white-space: nowrap; }
+/* Keep compact numeric values contained without preventing localized headers from wrapping. */
+.logs-table tbody td.logs-col-cache-hit,
+.logs-table tbody td.log-col-rate,
+.logs-table tbody td.log-col-cost,
+.logs-table tbody td.log-col-duration { white-space: nowrap; }
 table.logs-table {
   width: 100%;
-  min-width: 1180px;
+  max-width: 100%;
+  min-width: 0;
   table-layout: fixed;
 }
 .logs-table col.logs-col-time { width: 10%; }
@@ -2114,11 +2118,8 @@ table.logs-table {
 .logs-table col.logs-col-effort { width: 9%; }
 .logs-table col.logs-col-provider { width: 11%; }
 .logs-table col.logs-col-status { width: 8%; }
-.logs-table col.logs-col-request { width: 9%; }
 .logs-table col.logs-col-duration { width: 8%; }
-.logs-table .logs-col-cache-hit { min-width: 8ch; white-space: nowrap; }
-.log-col-rate { min-width: 7ch; white-space: nowrap; }
-.log-col-cost { min-width: 10ch; white-space: nowrap; }
+.logs-table col.logs-col-request { width: 9%; }
 /* table-layout: fixed sizes the columns but does not clip them: a cell whose content is wider
    than its <col> paints straight over the neighbour (seen as "US$0.1401claude-fable-5-1" and a
    "reasoning_effort=high" caption sitting under the provider name). Clip at the cell so an
@@ -2183,6 +2184,7 @@ table.logs-table {
 }
 
 .logs-table-wrap {
+  overflow-x: hidden;
   overflow-y: auto;
   overflow-anchor: none;
   scrollbar-gutter: stable;
@@ -2199,6 +2201,11 @@ table.logs-table {
   top: 0;
   z-index: 1;
   background: var(--surface);
+}
+/* Keep localized header text inside each fixed-width Logs column. */
+.logs-table thead th {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .logs-virtual-spacer {

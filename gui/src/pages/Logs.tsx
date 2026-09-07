@@ -749,8 +749,8 @@ export default function Logs({ apiBase }: { apiBase: string }) {
               <col className="logs-col-effort" />
               <col className="logs-col-provider" />
               <col className="logs-col-status" />
-              <col className="logs-col-request" />
               <col className="logs-col-duration" />
+              <col className="logs-col-request" />
             </colgroup>
             <thead>
              <tr>
@@ -763,8 +763,8 @@ export default function Logs({ apiBase }: { apiBase: string }) {
                <th>{t("logs.col.effort")}</th>
                <th>{t("logs.col.provider")}</th>
                <th>{t("logs.col.status")}</th>
-                <th>{t("logs.col.request")}</th>
-               <th className="num log-col-duration">{t("logs.col.duration")}</th>
+                <th className="num log-col-duration">{t("logs.col.duration")}</th>
+               <th>{t("logs.col.request")}</th>
              </tr>
             </thead>
             <tbody>
@@ -863,8 +863,8 @@ export default function Logs({ apiBase }: { apiBase: string }) {
                       </button>
                     </span>
                  </td>
-                  <td className="muted mono"><span className="log-reqid" title={log.requestId}>{log.requestId ?? "-"}</span></td>
                   <td className="num log-col-duration">{formatDurationSeconds(log.durationMs, localeTag)}</td>
+                  <td className="muted mono"><span className="log-reqid" title={log.requestId}>{log.requestId ?? "-"}</span></td>
                 </tr>
                 );
               })}
