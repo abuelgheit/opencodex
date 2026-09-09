@@ -5632,6 +5632,7 @@ describe("Codex catalog routed normalization", () => {
     expect(provider.modelSupportsReasoningSummaries).toEqual({
       "deepseek-v4-flash": false,
       "deepseek-v4-pro": true,
+      "deepseek-v4.1-flash-expires-on-0910": true,
     });
   });
 

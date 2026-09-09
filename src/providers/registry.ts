@@ -596,6 +596,24 @@ const DEEPSEEK_THINKING_MODELS = ["deepseek-v4-pro", "deepseek-v4-flash"];
  * at which point this id retires the same way deepseek-chat/reasoner did.
  */
 const DEEPSEEK_VISION_PREVIEW_MODEL = "deepseek-v4-flash-vision-exp";
+/*
+ * DeepSeek V4.1 Flash intermediate beta (opened 2026-09-08, api-docs.deepseek.com): a
+ * new architecture with NATIVE multimodal input (text+image, no sidecar), billed at the
+ * deepseek-v4-flash rate and carrying the same low/high/max thinking ladder. The id
+ * embeds its own expiry — it stops resolving after 2026-09-10 — so this is a temporary
+ * row, not a stable catalog member. Retire it (with its pricing overlay) when DeepSeek
+ * publishes the permanent V4.1 id.
+ */
+const DEEPSEEK_V41_FLASH_BETA_MODEL = "deepseek-v4.1-flash-expires-on-0910";
+/*
+ * Thinking-capable DeepSeek ids that also accept native image input. They must stay out
+ * of `noVisionModels` (which routes images through the vision sidecar) while still
+ * advertising the V4 effort ladder, so they are tracked separately from the text-only
+ * thinking models above.
+ */
+const DEEPSEEK_MULTIMODAL_THINKING_MODELS = [DEEPSEEK_V41_FLASH_BETA_MODEL];
+/** Every DeepSeek id that carries the V4 thinking ladder: text-only plus native-multimodal. */
+const DEEPSEEK_REASONING_MODELS = [...DEEPSEEK_THINKING_MODELS, ...DEEPSEEK_MULTIMODAL_THINKING_MODELS];
 /**
  * CommandCode routes verified to accept image input end-to-end (#2406).
  *
@@ -1928,12 +1946,14 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
     // the V4 ids — defaultModel and the model-specific wiring above use them.
     // deepseek-v4-flash-vision-exp: experimental vision preview (2026-08-21) —
     // expected to merge into deepseek-v4-flash later; see DEEPSEEK_VISION_PREVIEW_MODEL.
-    models: ["deepseek-chat", "deepseek-reasoner", ...DEEPSEEK_THINKING_MODELS, DEEPSEEK_VISION_PREVIEW_MODEL],
+    // DEEPSEEK_V41_FLASH_BETA_MODEL: temporary 2026-09-08 beta id with native vision.
+    models: ["deepseek-chat", "deepseek-reasoner", ...DEEPSEEK_THINKING_MODELS, DEEPSEEK_VISION_PREVIEW_MODEL, DEEPSEEK_V41_FLASH_BETA_MODEL],
     defaultModel: "deepseek-v4-flash",
     // Official DeepSeek Codex setup (codex-deepseek-setup.sh) advertises 1,048,576
     // for both V4 models; the older 1,000,000 figure was a rounded approximation.
-    modelContextWindows: { "deepseek-v4-flash": 1_048_576, "deepseek-v4-pro": 1_048_576, [DEEPSEEK_VISION_PREVIEW_MODEL]: 1_048_576 },
-    modelInputModalities: { [DEEPSEEK_VISION_PREVIEW_MODEL]: ["text", "image"] },
+    // The V4.1 Flash beta shares the V4 1M window.
+    modelContextWindows: { "deepseek-v4-flash": 1_048_576, "deepseek-v4-pro": 1_048_576, [DEEPSEEK_VISION_PREVIEW_MODEL]: 1_048_576, [DEEPSEEK_V41_FLASH_BETA_MODEL]: 1_048_576 },
+    modelInputModalities: { [DEEPSEEK_VISION_PREVIEW_MODEL]: ["text", "image"], [DEEPSEEK_V41_FLASH_BETA_MODEL]: ["text", "image"] },
     // DeepSeek documents both V4 models as native Responses API models adapted for Codex
     // (model table marks Responses API ✓ for flash and pro; the /responses reference lists
     // both ids as accepted `model` values — verified 2026-08-13 with the V4 Pro GA,
@@ -1947,6 +1967,8 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
       // for no gain.
       "deepseek-v4-flash": { wire: "openai-responses", inbound: ["responses"] },
       "deepseek-v4-pro": { wire: "openai-responses", inbound: ["responses"] },
+      // The V4.1 Flash beta keeps the V4 Responses surface (same base URL, model name only).
+      [DEEPSEEK_V41_FLASH_BETA_MODEL]: { wire: "openai-responses", inbound: ["responses"] },
     },
     // The #875-era bounded-JSON force (`modelResponsesUpstreamStreaming`) is retired
     // for this entry: the official guide documents a `response.completed` /
@@ -1961,7 +1983,7 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
     // devlog/_fin/260807_deepseek_responses_streaming/000_plan.md.
     // Current official streams normally carry a real terminal; retain a narrow grace
     // repair for the historical shape that closes after a complete graph without one.
-    modelResponsesTerminalRepair: { "deepseek-v4-flash": { graceMs: 5_000 }, "deepseek-v4-pro": { graceMs: 5_000 } },
+    modelResponsesTerminalRepair: { "deepseek-v4-flash": { graceMs: 5_000 }, "deepseek-v4-pro": { graceMs: 5_000 }, [DEEPSEEK_V41_FLASH_BETA_MODEL]: { graceMs: 5_000 } },
     // DeepSeek's Responses route emits bare UUID item ids, which leave Codex
     // clients stuck on an uncommitted turn (#938). Client-facing only — raw
     // continuation snapshots keep the upstream ids.
@@ -1997,13 +2019,14 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
     - 대안 분석: Globally preserve reasoning_content for all OpenAI-compatible models; preserve it for legacy deepseek-reasoner too; mark only V4 thinking models in registry metadata.
     - 선택 근거: DeepSeek V4 thinking mode requires history replay, while older DeepSeek reasoner has different compatibility rules. A model-scoped registry flag fixes built-in and stale saved configs without broad provider regressions.
     */
-    modelReasoningEfforts: Object.fromEntries(DEEPSEEK_THINKING_MODELS.map(id => [id, deepseekThinkingEffortsFor(id)])),
-    modelReasoningEffortMap: Object.fromEntries(DEEPSEEK_THINKING_MODELS.map(id => [id, deepseekReasoningMapFor(id)])),
-    modelSupportsReasoningSummaries: Object.fromEntries(DEEPSEEK_THINKING_MODELS.map(id => [id, true])),
-    preserveReasoningContentModels: DEEPSEEK_THINKING_MODELS,
-    // Issue #88: every DeepSeek API model is text-only input (no image support upstream) — the
+    modelReasoningEfforts: Object.fromEntries(DEEPSEEK_REASONING_MODELS.map(id => [id, deepseekThinkingEffortsFor(id)])),
+    modelReasoningEffortMap: Object.fromEntries(DEEPSEEK_REASONING_MODELS.map(id => [id, deepseekReasoningMapFor(id)])),
+    modelSupportsReasoningSummaries: Object.fromEntries(DEEPSEEK_REASONING_MODELS.map(id => [id, true])),
+    preserveReasoningContentModels: DEEPSEEK_REASONING_MODELS,
+    // Issue #88: the text-only DeepSeek API models have no image support upstream — the
     // vision sidecar describes attached images for them, and the catalog advertises image input
-    // on their behalf (same treatment as opencode-go's DeepSeek V4 entries above).
+    // on their behalf (same treatment as opencode-go's DeepSeek V4 entries above). The native
+    // multimodal rows (vision preview, V4.1 Flash beta) are deliberately absent.
     noVisionModels: ["deepseek-chat", "deepseek-reasoner", ...DEEPSEEK_THINKING_MODELS],
   },
   // llama-3.3-70b was deprecated by Cerebras on 2026-02-16. Evidence: devlog/_plan/260710_provider_hardening/003_research_aggregators.md.

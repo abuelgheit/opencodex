@@ -362,8 +362,29 @@ describe("resolveMatchedPrice", () => {
     expect(resolveMatchedPrice("deepseek", "deepseek/deepseek-v4-flash-0731")).toBeNull();
   });
 
-  test("16. shipped overlay membership: 70 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
-    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(70);
+  // The V4.1 Flash beta id is absent from the vendored catalog, so its price comes from
+  // the shipped overlay. DeepSeek bills in CNY (off-peak ¥0.05/¥1.50/¥4.50 per 1M) and
+  // the overlay carries the dashboard-equivalent USD at ~7.24 CNY/USD. Temporary row.
+  test("9e. deepseek-v4.1-flash beta resolves from the shipped overlay at the CNY dashboard rate", () => {
+    expect(getModelMetadata("deepseek", "deepseek-v4.1-flash-expires-on-0910")).toBeUndefined();
+    expect(resolveMatchedPrice("deepseek", "deepseek-v4.1-flash-expires-on-0910")).toMatchObject({
+      provider: "deepseek",
+      modelId: "deepseek-v4.1-flash-expires-on-0910",
+      cost4: { input: 0.2072, output: 0.6215, cacheRead: 0.0069, cacheWrite: 0 },
+      source: "expected",
+      status: "verified",
+    });
+    // Reproduces the 2026-09-09 DeepSeek dashboard reconciliation: 15.9M tokens at a
+    // 98% cache-hit rate billed ¥1.7384 off-peak, shown as ~$0.24 at 7.24 CNY/USD.
+    const cost = calculateCost(
+      { input: 240_177, output: 133_731, cacheRead: 15_526_912, cacheWrite: 0 },
+      { input: 0.2072, output: 0.6215, cacheRead: 0.0069, cacheWrite: 0 },
+    );
+    expect(cost.total).toBeCloseTo(0.24, 2);
+  });
+
+  test("16. shipped overlay membership: 71 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
+    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(71);
     expect(EXPECTED_PRICE_OVERLAYS.some(row => row.status === "unverified")).toBe(false);
     const keys = new Set(EXPECTED_PRICE_OVERLAYS.map(row => `${row.provider}/${row.modelId}`));
     for (const expected of [
@@ -380,6 +401,7 @@ describe("resolveMatchedPrice", () => {
       "minimax-cn/MiniMax-M2.1-highspeed",
       "deepseek/deepseek-chat",
       "deepseek/deepseek-reasoner",
+      "deepseek/deepseek-v4.1-flash-expires-on-0910",
       "google-antigravity/gemini-3.8-flash",
       "google-antigravity/gemini-3.8-flash-low",
       "google-antigravity/gemini-3.8-flash-medium",
