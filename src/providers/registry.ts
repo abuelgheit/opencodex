@@ -591,27 +591,26 @@ const OPENCODE_GO_THINKING_BUDGET_MODELS = ["qwen3.5-plus", "qwen3.6-plus", "qwe
 const DEEPSEEK_THINKING_MODELS = ["deepseek-v4-pro", "deepseek-v4-flash"];
 /*
  * DeepSeek's experimental vision preview (released 2026-08-21, api-docs.deepseek.com):
- * text+image input on the V4 Flash base. DeepSeek positions it as a preview id;
- * the expectation is that vision merges into `deepseek-v4-flash` proper later,
- * at which point this id retires the same way deepseek-chat/reasoner did.
+ * text+image input on the V4 Flash base. It is now a legacy id: DeepSeek still accepts
+ * it but serves it with the official V4.1 Flash model below.
  */
 const DEEPSEEK_VISION_PREVIEW_MODEL = "deepseek-v4-flash-vision-exp";
 /*
- * DeepSeek V4.1 Flash intermediate beta (opened 2026-09-08, api-docs.deepseek.com): a
- * new architecture with NATIVE multimodal input (text+image, no sidecar), billed at the
- * deepseek-v4-flash rate and carrying the same low/high/max thinking ladder. The id
- * embeds its own expiry — it stops resolving after 2026-09-10 — so this is a temporary
- * row, not a stable catalog member. Retire it (with its pricing overlay) when DeepSeek
- * publishes the permanent V4.1 id.
+ * Official DeepSeek-V4.1-Flash, released 2026-09-10
+ * (https://api-docs.deepseek.com/quick_start/pricing). The API model id is
+ * `deepseek-flash`; "DeepSeek-V4.1-Flash" is the version label. Native multimodal
+ * input, 1M context, thinking mode, and the Responses API. The legacy ids
+ * `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are still accepted upstream
+ * and now served by V4.1 Flash at the Flash price.
  */
-const DEEPSEEK_V41_FLASH_BETA_MODEL = "deepseek-v4.1-flash-expires-on-0910";
+const DEEPSEEK_FLASH_MODEL = "deepseek-flash";
 /*
  * Thinking-capable DeepSeek ids that also accept native image input. They must stay out
  * of `noVisionModels` (which routes images through the vision sidecar) while still
  * advertising the V4 effort ladder, so they are tracked separately from the text-only
  * thinking models above.
  */
-const DEEPSEEK_MULTIMODAL_THINKING_MODELS = [DEEPSEEK_V41_FLASH_BETA_MODEL];
+const DEEPSEEK_MULTIMODAL_THINKING_MODELS = [DEEPSEEK_FLASH_MODEL];
 /** Every DeepSeek id that carries the V4 thinking ladder: text-only plus native-multimodal. */
 const DEEPSEEK_REASONING_MODELS = [...DEEPSEEK_THINKING_MODELS, ...DEEPSEEK_MULTIMODAL_THINKING_MODELS];
 /**
@@ -1944,20 +1943,17 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
     // keep validating and routing (they previously mapped to v4-flash; devlog
     // _fin/260710_provider_hardening/002_research_cn.md). The current offerings are
     // the V4 ids — defaultModel and the model-specific wiring above use them.
-    // deepseek-v4-flash-vision-exp: experimental vision preview (2026-08-21) —
-    // expected to merge into deepseek-v4-flash later; see DEEPSEEK_VISION_PREVIEW_MODEL.
-    // DEEPSEEK_V41_FLASH_BETA_MODEL: temporary 2026-09-08 beta id with native vision.
-    models: ["deepseek-chat", "deepseek-reasoner", ...DEEPSEEK_THINKING_MODELS, DEEPSEEK_VISION_PREVIEW_MODEL, DEEPSEEK_V41_FLASH_BETA_MODEL],
-    defaultModel: "deepseek-v4-flash",
+    // deepseek-flash: the official DeepSeek-V4.1-Flash id (2026-09-10), and the default.
+    // deepseek-v4-flash-vision-exp: the retired 2026-08-21 vision preview; upstream still
+    // accepts it and serves V4.1 Flash. Legacy ids are billed at the Flash price.
+    models: ["deepseek-chat", "deepseek-reasoner", ...DEEPSEEK_THINKING_MODELS, DEEPSEEK_VISION_PREVIEW_MODEL, DEEPSEEK_FLASH_MODEL],
+    defaultModel: "deepseek-flash",
     // Official DeepSeek Codex setup (codex-deepseek-setup.sh) advertises 1,048,576
     // for both V4 models; the older 1,000,000 figure was a rounded approximation.
-    // The V4.1 Flash beta shares the V4 1M window.
-    modelContextWindows: { "deepseek-v4-flash": 1_048_576, "deepseek-v4-pro": 1_048_576, [DEEPSEEK_VISION_PREVIEW_MODEL]: 1_048_576, [DEEPSEEK_V41_FLASH_BETA_MODEL]: 1_048_576 },
-    modelInputModalities: { [DEEPSEEK_VISION_PREVIEW_MODEL]: ["text", "image"], [DEEPSEEK_V41_FLASH_BETA_MODEL]: ["text", "image"] },
-    // DeepSeek documents both V4 models as native Responses API models adapted for Codex
-    // (model table marks Responses API ✓ for flash and pro; the /responses reference lists
-    // both ids as accepted `model` values — verified 2026-08-13 with the V4 Pro GA,
-    // version label DeepSeek-V4-Pro-0813).
+    // V4.1 Flash shares the V4 1M window.
+    modelContextWindows: { "deepseek-v4-flash": 1_048_576, "deepseek-v4-pro": 1_048_576, [DEEPSEEK_VISION_PREVIEW_MODEL]: 1_048_576, [DEEPSEEK_FLASH_MODEL]: 1_048_576 },
+    modelInputModalities: { [DEEPSEEK_VISION_PREVIEW_MODEL]: ["text", "image"], [DEEPSEEK_FLASH_MODEL]: ["text", "image"] },
+    // DeepSeek documents the V4 family as native Responses API models adapted for Codex.
     modelWireDefaults: {
       // Codex speaks Responses natively and DeepSeek ships a Codex-compatible
       // apply_patch tool on that wire, so a Responses inbound goes straight out with
@@ -1967,8 +1963,8 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
       // for no gain.
       "deepseek-v4-flash": { wire: "openai-responses", inbound: ["responses"] },
       "deepseek-v4-pro": { wire: "openai-responses", inbound: ["responses"] },
-      // The V4.1 Flash beta keeps the V4 Responses surface (same base URL, model name only).
-      [DEEPSEEK_V41_FLASH_BETA_MODEL]: { wire: "openai-responses", inbound: ["responses"] },
+      // V4.1 Flash keeps the same Responses surface (same base URL, model name only).
+      [DEEPSEEK_FLASH_MODEL]: { wire: "openai-responses", inbound: ["responses"] },
     },
     // The #875-era bounded-JSON force (`modelResponsesUpstreamStreaming`) is retired
     // for this entry: the official guide documents a `response.completed` /
@@ -1983,7 +1979,7 @@ export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = [
     // devlog/_fin/260807_deepseek_responses_streaming/000_plan.md.
     // Current official streams normally carry a real terminal; retain a narrow grace
     // repair for the historical shape that closes after a complete graph without one.
-    modelResponsesTerminalRepair: { "deepseek-v4-flash": { graceMs: 5_000 }, "deepseek-v4-pro": { graceMs: 5_000 }, [DEEPSEEK_V41_FLASH_BETA_MODEL]: { graceMs: 5_000 } },
+    modelResponsesTerminalRepair: { "deepseek-v4-flash": { graceMs: 5_000 }, "deepseek-v4-pro": { graceMs: 5_000 }, [DEEPSEEK_FLASH_MODEL]: { graceMs: 5_000 } },
     // DeepSeek's Responses route emits bare UUID item ids, which leave Codex
     // clients stuck on an uncommitted turn (#938). Client-facing only — raw
     // continuation snapshots keep the upstream ids.

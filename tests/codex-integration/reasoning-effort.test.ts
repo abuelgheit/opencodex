@@ -272,7 +272,7 @@ describe("provider-specific reasoning effort mapping", () => {
     const body = JSON.parse(req.body as string) as { messages: Record<string, unknown>[] };
 
     expect(route.provider.preserveReasoningContentModels).toEqual([
-      "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4.1-flash-expires-on-0910",
+      "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash",
     ]);
     expect(body.messages[1].reasoning_content).toBeUndefined();
   });

@@ -362,29 +362,47 @@ describe("resolveMatchedPrice", () => {
     expect(resolveMatchedPrice("deepseek", "deepseek/deepseek-v4-flash-0731")).toBeNull();
   });
 
-  // The V4.1 Flash beta id is absent from the vendored catalog, so its price comes from
-  // the shipped overlay. DeepSeek bills in CNY (off-peak ¥0.05/¥1.50/¥4.50 per 1M) and
-  // the overlay carries the dashboard-equivalent USD at ~7.24 CNY/USD. Temporary row.
-  test("9e. deepseek-v4.1-flash beta resolves from the shipped overlay at the CNY dashboard rate", () => {
-    expect(getModelMetadata("deepseek", "deepseek-v4.1-flash-expires-on-0910")).toBeUndefined();
-    expect(resolveMatchedPrice("deepseek", "deepseek-v4.1-flash-expires-on-0910")).toMatchObject({
+  // Official DeepSeek-V4.1-Flash (2026-09-10) is absent from the vendored catalog, so its
+  // price comes from the shipped overlay at the vendor's published off-peak USD rate.
+  test("9e. deepseek-flash resolves from the shipped overlay at the official off-peak rate", () => {
+    expect(getModelMetadata("deepseek", "deepseek-flash")).toBeUndefined();
+    expect(resolveMatchedPrice("deepseek", "deepseek-flash")).toMatchObject({
       provider: "deepseek",
-      modelId: "deepseek-v4.1-flash-expires-on-0910",
-      cost4: { input: 0.2072, output: 0.6215, cacheRead: 0.0069, cacheWrite: 0 },
+      modelId: "deepseek-flash",
+      cost4: { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0 },
       source: "expected",
       status: "verified",
     });
-    // Reproduces the 2026-09-09 DeepSeek dashboard reconciliation: 15.9M tokens at a
-    // 98% cache-hit rate billed ¥1.7384 off-peak, shown as ~$0.24 at 7.24 CNY/USD.
-    const cost = calculateCost(
-      { input: 240_177, output: 133_731, cacheRead: 15_526_912, cacheWrite: 0 },
-      { input: 0.2072, output: 0.6215, cacheRead: 0.0069, cacheWrite: 0 },
-    );
-    expect(cost.total).toBeCloseTo(0.24, 2);
+    // The legacy vision-preview id is served by V4.1 Flash and billed at the Flash price.
+    expect(resolveMatchedPrice("deepseek", "deepseek-v4-flash-vision-exp")).toMatchObject({
+      cost4: { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0 },
+      source: "expected",
+      status: "verified",
+    });
   });
 
-  test("16. shipped overlay membership: 71 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
-    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(71);
+  // V4.1 Flash took over the `deepseek-v4-flash` id on 2026-09-10. The bundled row still
+  // carries the retired V4-Flash-0731 price, so the verified override must win over it.
+  test("9f. deepseek-v4-flash is repriced by the verified override, not the stale bundle", () => {
+    expect(getModelMetadata("deepseek", "deepseek-v4-flash")?.cost)
+      .toEqual({ input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 });
+    expect(resolveMatchedPrice("deepseek", "deepseek-v4-flash")).toMatchObject({
+      provider: "deepseek",
+      modelId: "deepseek-v4-flash",
+      cost4: { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0 },
+      source: "expected",
+      status: "verified",
+    });
+    // V4 Pro is repriced to the current official table too.
+    expect(resolveMatchedPrice("deepseek", "deepseek-v4-pro")).toMatchObject({
+      cost4: { input: 0.66, output: 1.98, cacheRead: 0.022, cacheWrite: 0 },
+      source: "expected",
+      status: "verified",
+    });
+  });
+
+  test("16. shipped overlay membership: 72 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
+    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(72);
     expect(EXPECTED_PRICE_OVERLAYS.some(row => row.status === "unverified")).toBe(false);
     const keys = new Set(EXPECTED_PRICE_OVERLAYS.map(row => `${row.provider}/${row.modelId}`));
     for (const expected of [
@@ -401,7 +419,8 @@ describe("resolveMatchedPrice", () => {
       "minimax-cn/MiniMax-M2.1-highspeed",
       "deepseek/deepseek-chat",
       "deepseek/deepseek-reasoner",
-      "deepseek/deepseek-v4.1-flash-expires-on-0910",
+      "deepseek/deepseek-flash",
+      "deepseek/deepseek-v4-flash-vision-exp",
       "google-antigravity/gemini-3.8-flash",
       "google-antigravity/gemini-3.8-flash-low",
       "google-antigravity/gemini-3.8-flash-medium",
@@ -1439,11 +1458,16 @@ describe("aggregator vendor-prefixed model ids (#3136)", () => {
   // CommandCode serves "deepseek/deepseek-v4-flash"; the cost catalog stores the bare id.
   // The exact lookup missed a price that is present, so every request through such a
   // provider reported no cost at all.
-  test("a vendor-prefixed id resolves to the same price as its bare id", () => {
+  //
+  // The direct `deepseek` provider now carries a verified override (V4.1 Flash took over
+  // the id on 2026-09-10). The prefix strip must still reach the VENDOR CATALOG row and
+  // not inherit the provider-scoped override: that scoping is what keeps a first-party
+  // price correction from silently repricing every reseller (#3136).
+  test("a vendor-prefixed id resolves to the vendor catalog row, not a provider-scoped override", () => {
     const bare = resolveMatchedPrice("deepseek", "deepseek-v4-flash");
     const prefixed = resolveMatchedPrice("commandcode-api", "deepseek/deepseek-v4-flash");
-    expect(bare?.cost4).toBeDefined();
-    expect(prefixed?.cost4).toEqual(bare!.cost4);
+    expect(bare?.cost4).toEqual({ input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0 });
+    expect(prefixed?.cost4).toEqual({ input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 });
     // Derived, not claimed as an exact catalog row for that provider.
     expect(prefixed?.status).toBe("verified-derived");
     expect(prefixed?.jawcodeProvider).toBe("deepseek");

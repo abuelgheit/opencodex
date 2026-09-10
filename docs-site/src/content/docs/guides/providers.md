@@ -388,8 +388,10 @@ wait-and-retry remains opt-in via [`retryOn429`](/reference/configuration/).
 Most use the `openai-chat` adapter with a bearer key; a few that expose only an Anthropic-compatible
 endpoint (e.g. **Xiaomi MiMo**) use the `anthropic` adapter (`x-api-key`).
 Volcengine Agent Plan uses its native Responses endpoint through `openai-responses`.
-The built-in DeepSeek preset also routes `deepseek-v4-flash` over its native Responses endpoint and
-keeps upstream SSE streaming enabled. If that model finishes every output item but omits the final
+The built-in DeepSeek preset defaults to `deepseek-flash` (DeepSeek-V4.1-Flash, released
+2026-09-10) and routes it over its native Responses endpoint, keeping upstream SSE streaming
+enabled; the legacy ids `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are still accepted
+upstream and served by the same model. If that model finishes every output item but omits the final
 Responses event, opencodex applies a five-second model-scoped grace repair; malformed or partial
 streams close as incomplete rather than being reported as successful.
 

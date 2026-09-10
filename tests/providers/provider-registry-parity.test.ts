@@ -148,23 +148,24 @@ describe("provider registry parity", () => {
     expect(KEY_LOGIN_PROVIDERS.deepseek.modelReasoningEffortMap?.["deepseek-v4-flash"]?.xhigh).toBe("high");
     expect(KEY_LOGIN_PROVIDERS.deepseek.modelReasoningEffortMap?.["deepseek-v4-flash"]?.max).toBe("max");
     expect(KEY_LOGIN_PROVIDERS.deepseek.preserveReasoningContentModels).toEqual([
-      "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4.1-flash-expires-on-0910",
+      "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash",
     ]);
     // Issue #88: the text-only DeepSeek API models rely on the vision sidecar.
     expect(KEY_LOGIN_PROVIDERS.deepseek.noVisionModels).toEqual([
       "deepseek-chat", "deepseek-reasoner", "deepseek-v4-pro", "deepseek-v4-flash",
     ]);
-    // DeepSeek V4.1 Flash beta (2026-09-08): native multimodal, 1M context, the Flash
-    // effort ladder, and the same Responses wire as the other V4 ids. The id expires
-    // 2026-09-10, so it is a temporary row that must not join noVisionModels.
+    // Official DeepSeek-V4.1-Flash (2026-09-10): API id `deepseek-flash`, native
+    // multimodal, 1M context, the Flash effort ladder, and the V4 Responses wire. It is
+    // the registry default and must not join noVisionModels.
     const deepseekEntry = PROVIDER_REGISTRY.find(entry => entry.id === "deepseek");
-    expect(KEY_LOGIN_PROVIDERS.deepseek.models).toContain("deepseek-v4.1-flash-expires-on-0910");
-    expect(KEY_LOGIN_PROVIDERS.deepseek.modelContextWindows?.["deepseek-v4.1-flash-expires-on-0910"]).toBe(1_048_576);
-    expect(KEY_LOGIN_PROVIDERS.deepseek.modelInputModalities?.["deepseek-v4.1-flash-expires-on-0910"]).toEqual(["text", "image"]);
-    expect(KEY_LOGIN_PROVIDERS.deepseek.modelReasoningEfforts?.["deepseek-v4.1-flash-expires-on-0910"]).toEqual(["low", "high", "max"]);
-    expect(deepseekEntry?.modelWireDefaults?.["deepseek-v4.1-flash-expires-on-0910"]).toEqual({ wire: "openai-responses", inbound: ["responses"] });
-    expect(deepseekEntry?.modelResponsesTerminalRepair?.["deepseek-v4.1-flash-expires-on-0910"]).toEqual({ graceMs: 5_000 });
-    expect(KEY_LOGIN_PROVIDERS.deepseek.noVisionModels).not.toContain("deepseek-v4.1-flash-expires-on-0910");
+    expect(KEY_LOGIN_PROVIDERS.deepseek.defaultModel).toBe("deepseek-flash");
+    expect(KEY_LOGIN_PROVIDERS.deepseek.models).toContain("deepseek-flash");
+    expect(KEY_LOGIN_PROVIDERS.deepseek.modelContextWindows?.["deepseek-flash"]).toBe(1_048_576);
+    expect(KEY_LOGIN_PROVIDERS.deepseek.modelInputModalities?.["deepseek-flash"]).toEqual(["text", "image"]);
+    expect(KEY_LOGIN_PROVIDERS.deepseek.modelReasoningEfforts?.["deepseek-flash"]).toEqual(["low", "high", "max"]);
+    expect(deepseekEntry?.modelWireDefaults?.["deepseek-flash"]).toEqual({ wire: "openai-responses", inbound: ["responses"] });
+    expect(deepseekEntry?.modelResponsesTerminalRepair?.["deepseek-flash"]).toEqual({ graceMs: 5_000 });
+    expect(KEY_LOGIN_PROVIDERS.deepseek.noVisionModels).not.toContain("deepseek-flash");
   });
   // Registry-to-cost-metadata parity for the openrouter entry: every model the picker can route
   // must have a cost row in the vendored catalog, resolved by exact native id (no vendor-prefix
@@ -312,7 +313,7 @@ describe("provider registry parity", () => {
     expect(deepseek).toMatchObject({
       adapter: "openai-chat",
       baseUrl: "https://api.deepseek.com",
-      defaultModel: "deepseek-v4-flash",
+      defaultModel: "deepseek-flash",
       modelContextWindows: {
         "deepseek-v4-flash": 1_048_576,
         "deepseek-v4-pro": 1_048_576,
@@ -1279,8 +1280,8 @@ describe("free-provider directory isolation", () => {
     const cases: Array<{ provider: string; model: string; flash: boolean }> = [
       { provider: "deepseek", model: "deepseek-v4-pro", flash: false },
       { provider: "deepseek", model: "deepseek-v4-flash", flash: true },
-      // V4.1 Flash beta: the substring classifier reads "flash", so it gets the Flash ladder.
-      { provider: "deepseek", model: "deepseek-v4.1-flash-expires-on-0910", flash: true },
+      // Official V4.1 Flash: the substring classifier reads "flash", so it gets the Flash ladder.
+      { provider: "deepseek", model: "deepseek-flash", flash: true },
       { provider: "opencode-go", model: "deepseek-v4-pro", flash: false },
       { provider: "opencode-go", model: "deepseek-v4-flash", flash: true },
       { provider: "orcarouter", model: "deepseek/deepseek-v4-pro", flash: false },
