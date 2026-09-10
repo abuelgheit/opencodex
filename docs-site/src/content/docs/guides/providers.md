@@ -597,8 +597,11 @@ forwarding continuation input; that is lossy, and `dropResponsesReasoningItems: 
 An install that already saved the Coding Plan provider on `openai-chat` keeps that wire — nothing
 rewrites a stored row — so switching is a deliberate edit: set `adapter` to `openai-responses` and
 `responsesPath` to `/responses`, or delete and re-add the preset. Explicit per-model `openai-chat`
-overrides remain available either way. The built-in DeepSeek preset also routes `deepseek-v4-flash` over its native Responses endpoint and
-keeps upstream SSE streaming enabled. If that model finishes every output item but omits the final
+overrides remain available either way. The built-in DeepSeek preset defaults to `deepseek-flash`
+(DeepSeek-V4.1-Flash, released 2026-09-10) and routes it over its native Responses endpoint,
+keeping upstream SSE streaming enabled; the legacy ids `deepseek-v4-flash` and
+`deepseek-v4-flash-vision-exp` are still accepted upstream and served by the same model. If that
+model finishes every output item but omits the final
 Responses event, opencodex applies a five-second model-scoped grace repair; malformed or partial
 streams close as incomplete rather than being reported as successful.
 The first-party `deepseek-flash` model advertises native `text` and `image` input, so image requests

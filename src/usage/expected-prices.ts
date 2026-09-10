@@ -136,6 +136,12 @@ const META_MUSE_SPARK_13_CONTRIBUTOR: Cost4 = { input: 0.1, output: 0.2, cacheRe
 const META_SPARK_SOURCE = `Meta Model API published price ${META_MODEL_PRICING}`;
 const META_SPARK_CONTRIBUTOR_SOURCE = `Meta Model API published Contributor-tier price ${META_MODEL_PRICING}; data-sharing discount tier`;
 const DEEPSEEK_PRICING = "https://api-docs.deepseek.com/quick_start/pricing-details-usd; V4 Flash alias transition scheduled 2026-07-24 — re-verify after";
+// Official DeepSeek-V4.1-Flash (released 2026-09-10). The vendor publishes USD directly:
+// off-peak $0.003 cache-hit / $0.15 cache-miss / $0.60 output per 1M, peak double
+// (01:00-04:00 & 06:00-10:00 UTC, Mon-Fri). These rows carry the off-peak rate — the cost
+// estimator applies a single rate and cannot model the time-of-day bands.
+const DEEPSEEK_FLASH_PRICING = "https://api-docs.deepseek.com/quick_start/pricing (USD; off-peak $0.003/$0.15/$0.60 per 1M cache-hit/cache-miss/output, peak 2×)";
+const DEEPSEEK_V41_FLASH_COST: Cost4 = { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0 };
 /*
  * DeepSeek V4.1-Flash list prices (USD / 1M tokens), verified 2026-09-17 against
  * https://api-docs.deepseek.com/quick_start/pricing. The page prices a peak window
@@ -237,6 +243,10 @@ export const EXPECTED_PRICE_OVERLAYS: readonly ExpectedPriceOverlay[] = [
   // DeepSeek current-generation IDs (verified; cache-hit price mapped to cacheRead).
   { provider: "deepseek", modelId: "deepseek-chat", cost4: { input: 0.27, output: 1.1, cacheRead: 0.07, cacheWrite: 0 }, source: DEEPSEEK_PRICING, verifiedAt: "2026-07-20", status: "verified" },
   { provider: "deepseek", modelId: "deepseek-reasoner", cost4: { input: 0.55, output: 2.19, cacheRead: 0.14, cacheWrite: 0 }, source: DEEPSEEK_PRICING, verifiedAt: "2026-07-20", status: "verified" },
+  // DeepSeek V4.1 Flash (2026-09-10): the official `deepseek-flash` id and its legacy
+  // vision-preview alias, both billed at the off-peak Flash rate (see DEEPSEEK_FLASH_PRICING).
+  { provider: "deepseek", modelId: "deepseek-flash", cost4: DEEPSEEK_V41_FLASH_COST, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-10", status: "verified" },
+  { provider: "deepseek", modelId: "deepseek-v4-flash-vision-exp", cost4: DEEPSEEK_V41_FLASH_COST, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-10", status: "verified" },
   // Google Antigravity effort-suffix variants — derived from the verified base-model
   // price (Google does not publish per-suffix prices; Agent inference bills at the
   // base model's standard rate per the official Billing FAQ).
@@ -457,6 +467,11 @@ export const VERIFIED_PRICE_OVERRIDES: readonly ExpectedPriceOverlay[] = [
     verifiedAt: "2026-09-23",
     status: "verified",
   },
+  // DeepSeek V4.1 Flash replaced `deepseek-v4-flash` on 2026-09-10; the bundled
+  // 0.14/0.28/0.0028 row is the retired V4-Flash-0731 price. V4 Pro is repriced to the
+  // current official table (and routes to V4.1 Flash after 2026-09-14 Beijing time).
+  { provider: "deepseek", modelId: "deepseek-v4-flash", cost4: DEEPSEEK_V41_FLASH_COST, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-10", status: "verified" },
+  { provider: "deepseek", modelId: "deepseek-v4-pro", cost4: { input: 0.66, output: 1.98, cacheRead: 0.022, cacheWrite: 0 }, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-10", status: "verified" },
 ];
 
 export function findVerifiedPriceOverride(
