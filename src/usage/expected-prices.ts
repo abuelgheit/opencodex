@@ -149,6 +149,8 @@ export const EXPECTED_PRICE_OVERLAYS: readonly ExpectedPriceOverlay[] = [
   // vision-preview alias, both billed at the off-peak Flash rate (see DEEPSEEK_FLASH_PRICING).
   { provider: "deepseek", modelId: "deepseek-flash", cost4: DEEPSEEK_V41_FLASH_COST, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-10", status: "verified" },
   { provider: "deepseek", modelId: "deepseek-v4-flash-vision-exp", cost4: DEEPSEEK_V41_FLASH_COST, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-10", status: "verified" },
+  // OpenRouter DeepSeek V4.1 Flash — priced at the same rate as the direct deepseek-flash.
+  { provider: "openrouter", modelId: "deepseek/deepseek-v4.1-flash", cost4: DEEPSEEK_V41_FLASH_COST, source: DEEPSEEK_FLASH_PRICING, verifiedAt: "2026-09-11", status: "verified" },
   // Google Antigravity effort-suffix variants — derived from the verified base-model
   // price (Google does not publish per-suffix prices; Agent inference bills at the
   // base model's standard rate per the official Billing FAQ).

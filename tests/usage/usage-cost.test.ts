@@ -401,8 +401,8 @@ describe("resolveMatchedPrice", () => {
     });
   });
 
-  test("16. shipped overlay membership: 72 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
-    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(72);
+  test("16. shipped overlay membership: 73 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
+    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(73);
     expect(EXPECTED_PRICE_OVERLAYS.some(row => row.status === "unverified")).toBe(false);
     const keys = new Set(EXPECTED_PRICE_OVERLAYS.map(row => `${row.provider}/${row.modelId}`));
     for (const expected of [
@@ -421,6 +421,7 @@ describe("resolveMatchedPrice", () => {
       "deepseek/deepseek-reasoner",
       "deepseek/deepseek-flash",
       "deepseek/deepseek-v4-flash-vision-exp",
+      "openrouter/deepseek/deepseek-v4.1-flash",
       "google-antigravity/gemini-3.8-flash",
       "google-antigravity/gemini-3.8-flash-low",
       "google-antigravity/gemini-3.8-flash-medium",
