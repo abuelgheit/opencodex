@@ -401,8 +401,30 @@ describe("resolveMatchedPrice", () => {
     });
   });
 
-  test("16. shipped overlay membership: 73 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
-    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(73);
+  // Ollama Cloud publishes a single per-model USD rate on its official pricing page.
+  // These two exact ids are the only Ollama rows; no fuzzy alias and no other model.
+  test("9g. ollama-cloud ids resolve from the shipped overlay at the official Ollama rate", () => {
+    expect(resolveMatchedPrice("ollama-cloud", "deepseek-v4.1-flash")).toMatchObject({
+      provider: "ollama-cloud",
+      modelId: "deepseek-v4.1-flash",
+      cost4: { input: 0.22, output: 0.66, cacheRead: 0.007, cacheWrite: 0 },
+      source: "expected",
+      status: "verified",
+    });
+    expect(resolveMatchedPrice("ollama-cloud", "glm-5.3-flash")).toMatchObject({
+      provider: "ollama-cloud",
+      modelId: "glm-5.3-flash",
+      cost4: { input: 0.15, output: 0.5, cacheRead: 0.03, cacheWrite: 0 },
+      source: "expected",
+      status: "verified",
+    });
+    // The source must remain the official Ollama pricing page, not a derived label.
+    expect(resolveMatchedPrice("ollama-cloud", "deepseek-v4.1-flash")?.sourceRef).toBe("https://ollama.com/pricing");
+    expect(resolveMatchedPrice("ollama-cloud", "glm-5.3-flash")?.sourceRef).toBe("https://ollama.com/pricing");
+  });
+
+  test("16. shipped overlay membership: 75 keys, including canonical Fable 5.1, Opus 5 and compatibility prices", () => {
+    expect(EXPECTED_PRICE_OVERLAYS.length).toBe(75);
     expect(EXPECTED_PRICE_OVERLAYS.some(row => row.status === "unverified")).toBe(false);
     const keys = new Set(EXPECTED_PRICE_OVERLAYS.map(row => `${row.provider}/${row.modelId}`));
     for (const expected of [
@@ -476,6 +498,8 @@ describe("resolveMatchedPrice", () => {
       "alibaba-token-plan/qwen3.8-max",
       "alibaba-token-plan-intl/qwen3.8-max",
       "cursor/auto",
+      "ollama-cloud/deepseek-v4.1-flash",
+      "ollama-cloud/glm-5.3-flash",
     ]) {
       expect(keys.has(expected)).toBe(true);
     }

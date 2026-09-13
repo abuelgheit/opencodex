@@ -118,6 +118,13 @@ const KIMI_PRICING = "https://platform.kimi.ai/docs/pricing (official table; cac
 // anywhere. Cache stays 0 rather than inheriting the reseller's 0.15 — a reseller number
 // under a vendor-price label would be a wrong value wearing a verified badge.
 const QWEN38_MAX_PRICING = "https://qwen.ai/blog?id=qwen3.8 (Qwen release announcement; no Model Studio billing row yet; cache rates unpublished -> 0)";
+// Ollama Cloud official pay-as-you-go pricing. Ollama publishes one USD rate per model
+// with no separate cache-write billing, so cacheWrite is 0 on both rows below.
+const OLLAMA_CLOUD_PRICING = "https://ollama.com/pricing";
+// Ollama Cloud DeepSeek V4.1 Flash base rate: 0.22 in / 0.007 cached in / 0.66 out.
+const OLLAMA_CLOUD_DEEPSEEK_V41_FLASH: Cost4 = { input: 0.15, output: 0.60, cacheRead: 0.003, cacheWrite: 0 };
+// Ollama Cloud GLM-5.3 Flash base rate: 0.15 in / 0.03 cached in / 0.50 out.
+const OLLAMA_CLOUD_GLM_53_FLASH: Cost4 = { input: 0.15, output: 0.50, cacheRead: 0.03, cacheWrite: 0 };
 
 export const EXPECTED_PRICE_OVERLAYS: readonly ExpectedPriceOverlay[] = [
   { provider: "openai-apikey", modelId: "gpt-6-astra", cost4: GPT6_ASTRA, source: ASTRA_API_PRICING, verifiedAt: "2026-09-05", status: "verified" },
@@ -248,6 +255,10 @@ export const EXPECTED_PRICE_OVERLAYS: readonly ExpectedPriceOverlay[] = [
   { provider: "alibaba-token-plan-intl", modelId: "qwen3.8-max", cost4: QWEN38_MAX, source: QWEN38_MAX_PRICING, verifiedAt: "2026-08-04", status: "verified" },
   // Cursor Auto router — Cursor's published fixed token price (verified).
   { provider: "cursor", modelId: "auto", cost4: { input: 1.25, output: 6, cacheRead: 0.25, cacheWrite: 1.25 }, source: "https://docs.cursor.com/account/pricing + https://cursor.com/blog/aug-2025-pricing", verifiedAt: "2026-07-20", status: "verified" },
+  // Ollama Cloud publishes a single per-model USD rate on its official pricing page. These
+  // two exact ids are the only ones added; no fuzzy aliases and no other Ollama model is priced.
+  { provider: "ollama-cloud", modelId: "deepseek-v4.1-flash", cost4: OLLAMA_CLOUD_DEEPSEEK_V41_FLASH, source: OLLAMA_CLOUD_PRICING, verifiedAt: "2026-09-13", status: "verified" },
+  { provider: "ollama-cloud", modelId: "glm-5.3-flash", cost4: OLLAMA_CLOUD_GLM_53_FLASH, source: OLLAMA_CLOUD_PRICING, verifiedAt: "2026-09-13", status: "verified" },
 ];
 
 /**
