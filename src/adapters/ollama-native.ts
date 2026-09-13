@@ -519,12 +519,31 @@ function nativeFormat(
   return format.schema;
 }
 
-function usageFromNative(value: JsonRecord | undefined): OcxUsage | undefined {
+/**
+ * Map a native usage record to canonical OcxUsage, carrying prior streaming input/output forward
+ * when a later record omits them. `prompt_eval_count` is the inclusive total input so cached reads
+ * map as a subset, never subtracted; malformed cache values are ignored without inventing counts.
+ */
+function usageFromNative(value: JsonRecord | undefined, previous?: OcxUsage): OcxUsage | undefined {
   if (!value) return undefined;
-  const input = isFiniteNonNegativeInteger(value.prompt_eval_count) ? value.prompt_eval_count : undefined;
-  const output = isFiniteNonNegativeInteger(value.eval_count) ? value.eval_count : undefined;
+  const input = isFiniteNonNegativeInteger(value.prompt_eval_count)
+    ? value.prompt_eval_count
+    : previous?.inputTokens;
+  const output = isFiniteNonNegativeInteger(value.eval_count)
+    ? value.eval_count
+    : previous?.outputTokens;
+  // Absent both current and prior input/output there is no usage to report, so a lone cache counter
+  // must never fabricate a breakdown. Otherwise a finite integer cache count is clamped to the total input.
   if (input === undefined && output === undefined) return undefined;
-  return { inputTokens: input ?? 0, outputTokens: output ?? 0 };
+  const rawCached = isFiniteNonNegativeInteger(value.prompt_eval_cached_count)
+    ? value.prompt_eval_cached_count
+    : undefined;
+  const cached = rawCached !== undefined && input !== undefined ? Math.min(rawCached, input) : undefined;
+  return {
+    inputTokens: input ?? 0,
+    outputTokens: output ?? 0,
+    ...(cached !== undefined ? { cachedInputTokens: cached, cacheReadInputTokens: cached } : {}),
+  };
 }
 
 function stopReasonFromNative(value: unknown): string | undefined {
@@ -862,8 +881,15 @@ function processNativeLine(
     state.terminalError = true;
     return [nativeErrorEvent(parsed.error, state.usage)];
   }
-  if (parsed.prompt_eval_count !== undefined || parsed.eval_count !== undefined) {
-    state.usage = usageFromNative(parsed) ?? state.usage;
+  // A reported cache counter must also refresh usage, otherwise a terminal frame that carries
+  // only prompt_eval_cached_count would leave the canonical read fields unset. Prior input/output
+  // is carried forward so counts that arrived on an earlier frame survive a cache-only terminal.
+  if (
+    parsed.prompt_eval_count !== undefined
+    || parsed.eval_count !== undefined
+    || parsed.prompt_eval_cached_count !== undefined
+  ) {
+    state.usage = usageFromNative(parsed, state.usage) ?? state.usage;
   }
   if (parsed.done_reason !== undefined) state.stopReason = stopReasonFromNative(parsed.done_reason);
 
