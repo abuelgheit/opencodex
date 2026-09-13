@@ -206,6 +206,13 @@ const DEVIN_KIMI_K27: Cost4 = { input: 0.95, output: 4, cacheRead: 0.19, cacheWr
 const DEVIN_GROK: Cost4 = { input: 2, output: 6, cacheRead: 0.3, cacheWrite: 0 };
 const DEVIN_PRICING = "https://docs.devin.ai/desktop/models (official modelCostData table, 2026-09-13; list rates for self-serve overage / enterprise ACU conversion on a subscription surface)";
 const DEVIN_SWE2_NOTE = "list rate; $0 self-serve through 2026-10-08 and 75%-off enterprise through 2026-12-31 are time-boxed promos, not baked in";
+// Ollama Cloud official pay-as-you-go pricing. Ollama publishes one USD rate per model
+// with no separate cache-write billing, so cacheWrite is 0 on both rows below.
+const OLLAMA_CLOUD_PRICING = "https://ollama.com/pricing";
+// Ollama Cloud DeepSeek V4.1 Flash base rate: 0.22 in / 0.007 cached in / 0.66 out.
+const OLLAMA_CLOUD_DEEPSEEK_V41_FLASH: Cost4 = { input: 0.22, output: 0.66, cacheRead: 0.007, cacheWrite: 0 };
+// Ollama Cloud GLM-5.3 Flash base rate: 0.15 in / 0.03 cached in / 0.50 out.
+const OLLAMA_CLOUD_GLM_53_FLASH: Cost4 = { input: 0.15, output: 0.50, cacheRead: 0.03, cacheWrite: 0 };
 
 export const EXPECTED_PRICE_OVERLAYS: readonly ExpectedPriceOverlay[] = [
   { provider: "openai-apikey", modelId: "gpt-6-astra", cost4: GPT6_ASTRA, source: ASTRA_API_PRICING, verifiedAt: "2026-09-05", status: "verified" },
@@ -440,6 +447,10 @@ export const EXPECTED_PRICE_OVERLAYS: readonly ExpectedPriceOverlay[] = [
   { provider: "devin", modelId: "glm-5-2", cost4: GLM_52, source: `enterprise list column (self-serve shows an unannounced 0 promo); ${DEVIN_PRICING}`, verifiedAt: "2026-09-13", status: "verified-derived" },
   { provider: "devin", modelId: "kimi-k2-7", cost4: DEVIN_KIMI_K27, source: DEVIN_PRICING, verifiedAt: "2026-09-13", status: "verified-derived" },
   { provider: "devin", modelId: "grok-4-5", cost4: DEVIN_GROK, source: DEVIN_PRICING, verifiedAt: "2026-09-13", status: "verified-derived" },
+  // Ollama Cloud publishes a single per-model USD rate on its official pricing page. These
+  // two exact ids are the only ones added; no fuzzy aliases and no other Ollama model is priced.
+  { provider: "ollama-cloud", modelId: "deepseek-v4.1-flash", cost4: OLLAMA_CLOUD_DEEPSEEK_V41_FLASH, source: OLLAMA_CLOUD_PRICING, verifiedAt: "2026-09-13", status: "verified" },
+  { provider: "ollama-cloud", modelId: "glm-5.3-flash", cost4: OLLAMA_CLOUD_GLM_53_FLASH, source: OLLAMA_CLOUD_PRICING, verifiedAt: "2026-09-13", status: "verified" },
 ];
 
 /**
