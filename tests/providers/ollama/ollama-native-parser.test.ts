@@ -222,6 +222,189 @@ describe("ollama-native — observer-free streaming", () => {
   });
 });
 
+describe("ollama-native — cache read usage mapping", () => {
+  test("streaming terminal maps total input, cached reads, and output", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    const frames = [
+      { model: "m", message: { role: "assistant", content: "hi" }, done: false },
+      {
+        model: "m",
+        message: { role: "assistant", content: "" },
+        done: true,
+        done_reason: "stop",
+        prompt_eval_count: 100,
+        prompt_eval_cached_count: 80,
+        eval_count: 12,
+      },
+    ];
+    const events: AdapterEvent[] = [];
+    for await (const event of adapter.parseStream(ndjsonResponse(frames), createTestTranslatorBudget())) {
+      events.push(event);
+    }
+    // Cache reads reach the terminal done event; output and inclusive input stay visible.
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 12,
+        cachedInputTokens: 80,
+        cacheReadInputTokens: 80,
+      },
+    });
+  });
+
+  test("terminal cache-only record preserves prior input/output and clamps against them", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    // Counts arrive on a non-terminal frame; the terminal record carries ONLY the cache counter,
+    // and its value exceeds the preserved input so the clamp must use the carried-forward total.
+    const frames = [
+      { model: "m", message: { role: "assistant", content: "hi" }, done: false, prompt_eval_count: 50, eval_count: 8 },
+      { model: "m", message: { role: "assistant", content: "" }, done: true, done_reason: "stop", prompt_eval_cached_count: 90 },
+    ];
+    const events: AdapterEvent[] = [];
+    for await (const event of adapter.parseStream(ndjsonResponse(frames), createTestTranslatorBudget())) {
+      events.push(event);
+    }
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      usage: {
+        inputTokens: 50,
+        outputTokens: 8,
+        cachedInputTokens: 50,
+        cacheReadInputTokens: 50,
+      },
+    });
+  });
+
+  test("a lone cache-only record with no prior counts invents no input/output usage", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    const frames = [
+      { model: "m", message: { role: "assistant", content: "hi" }, done: true, done_reason: "stop", prompt_eval_cached_count: 12 },
+    ];
+    const events: AdapterEvent[] = [];
+    for await (const event of adapter.parseStream(ndjsonResponse(frames), createTestTranslatorBudget())) {
+      events.push(event);
+    }
+    const done = events.at(-1) as { type: string; usage?: Record<string, unknown> };
+    expect(done.type).toBe("done");
+    expect(done.usage).toBeUndefined();
+  });
+
+  test("buffered response maps total input, cached reads, and output", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    const events = await adapter.parseResponse!(
+      ndjsonResponse([{
+        model: "m",
+        message: { role: "assistant", content: "answer" },
+        done: true,
+        done_reason: "stop",
+        prompt_eval_count: 256,
+        prompt_eval_cached_count: 192,
+        eval_count: 30,
+      }]),
+      createTestTranslatorBudget(),
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      usage: {
+        inputTokens: 256,
+        outputTokens: 30,
+        cachedInputTokens: 192,
+        cacheReadInputTokens: 192,
+      },
+    });
+  });
+
+  test("explicit zero cache reads are reported as zero, not omitted", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    const events = await adapter.parseResponse!(
+      ndjsonResponse([{
+        model: "m",
+        message: { role: "assistant", content: "x" },
+        done: true,
+        done_reason: "stop",
+        prompt_eval_count: 40,
+        prompt_eval_cached_count: 0,
+        eval_count: 5,
+      }]),
+      createTestTranslatorBudget(),
+    );
+    const usage = (events.at(-1) as { usage?: Record<string, unknown> }).usage!;
+    expect(usage.inputTokens).toBe(40);
+    expect(usage.outputTokens).toBe(5);
+    expect(usage).toHaveProperty("cachedInputTokens", 0);
+    expect(usage).toHaveProperty("cacheReadInputTokens", 0);
+  });
+
+  test("an absent cache metric omits the cache fields entirely", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    const events = await adapter.parseResponse!(
+      ndjsonResponse([{
+        model: "m",
+        message: { role: "assistant", content: "x" },
+        done: true,
+        done_reason: "stop",
+        prompt_eval_count: 40,
+        eval_count: 5,
+      }]),
+      createTestTranslatorBudget(),
+    );
+    const usage = (events.at(-1) as { usage?: Record<string, unknown> }).usage!;
+    expect(usage.inputTokens).toBe(40);
+    expect(usage.outputTokens).toBe(5);
+    expect(usage).not.toHaveProperty("cachedInputTokens");
+    expect(usage).not.toHaveProperty("cacheReadInputTokens");
+  });
+
+  test("malformed cache values are ignored rather than corrupting usage", async () => {
+    for (const malformed of ["80", -1, 1.5, null, true, {}]) {
+      const adapter = createOllamaNativeAdapter(provider());
+      const events = await adapter.parseResponse!(
+        ndjsonResponse([{
+          model: "m",
+          message: { role: "assistant", content: "x" },
+          done: true,
+          done_reason: "stop",
+          prompt_eval_count: 100,
+          prompt_eval_cached_count: malformed,
+          eval_count: 9,
+        }]),
+        createTestTranslatorBudget(),
+      );
+      const usage = (events.at(-1) as { usage?: Record<string, unknown> }).usage!;
+      expect(usage.inputTokens, JSON.stringify(malformed)).toBe(100);
+      expect(usage.outputTokens, JSON.stringify(malformed)).toBe(9);
+      expect(usage, JSON.stringify(malformed)).not.toHaveProperty("cachedInputTokens");
+      expect(usage, JSON.stringify(malformed)).not.toHaveProperty("cacheReadInputTokens");
+    }
+  });
+
+  test("an over-total cache value is clamped to the reported input", async () => {
+    const adapter = createOllamaNativeAdapter(provider());
+    const events = await adapter.parseResponse!(
+      ndjsonResponse([{
+        model: "m",
+        message: { role: "assistant", content: "x" },
+        done: true,
+        done_reason: "stop",
+        prompt_eval_count: 100,
+        prompt_eval_cached_count: 250,
+        eval_count: 9,
+      }]),
+      createTestTranslatorBudget(),
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 9,
+        cachedInputTokens: 100,
+        cacheReadInputTokens: 100,
+      },
+    });
+  });
+});
+
 describe("ollama-native — buffered terminal contract", () => {
   test("buffered done:true produces content + done with usage", async () => {
     const adapter = createOllamaNativeAdapter(provider());
