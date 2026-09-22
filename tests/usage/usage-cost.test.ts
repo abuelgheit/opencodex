@@ -545,7 +545,9 @@ describe("resolveMatchedPrice", () => {
     expect(resolveMatchedPrice("ollama-cloud", "deepseek-v4.1-flash")).toMatchObject({
       provider: "ollama-cloud",
       modelId: "deepseek-v4.1-flash",
-      cost4: { input: 0.22, output: 0.66, cacheRead: 0.007, cacheWrite: 0 },
+      // Live ollama.com/pricing: v4.1-flash is 0.15/0.003/0.60; 0.22/0.007/0.66 is
+      // the sibling deepseek-v4-flash row, not this id.
+      cost4: { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0 },
       source: "expected",
       status: "verified",
     });
@@ -559,6 +561,43 @@ describe("resolveMatchedPrice", () => {
     // The source must remain the official Ollama pricing page, not a derived label.
     expect(resolveMatchedPrice("ollama-cloud", "deepseek-v4.1-flash")?.sourceRef).toBe("https://ollama.com/pricing");
     expect(resolveMatchedPrice("ollama-cloud", "glm-5.3-flash")?.sourceRef).toBe("https://ollama.com/pricing");
+  });
+
+  // MiMo V2.6 (2026-09-22) keeps the V2.5 official table: Pro at 0.435/0.87, Flash at
+  // 0.14/0.28. The xiaomi vendor-bundle rows are what price any provider serving the
+  // bare ids (the custom `mimo` token-plan provider has no alias and rides model-level
+  // fallback); openrouter keeps its own exact prefixed rows, mirroring V2.5.
+  test("9h. mimo-v2.6 pro and flash resolve at the official V2.5-matched rates", () => {
+    expect(getModelMetadata("xiaomi", "mimo-v2.6-pro")?.cost)
+      .toEqual({ input: 0.435, output: 0.87, cacheRead: 0.0036, cacheWrite: 0 });
+    expect(getModelMetadata("xiaomi", "mimo-v2.6-flash")?.cost)
+      .toEqual({ input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 });
+    expect(resolveMatchedPrice("mimo", "mimo-v2.6-pro")).toMatchObject({
+      modelId: "mimo-v2.6-pro",
+      jawcodeProvider: "xiaomi",
+      cost4: { input: 0.435, output: 0.87, cacheRead: 0.0036, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified-derived",
+    });
+    expect(resolveMatchedPrice("mimo", "mimo-v2.6-flash")).toMatchObject({
+      modelId: "mimo-v2.6-flash",
+      jawcodeProvider: "xiaomi",
+      cost4: { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified-derived",
+    });
+    expect(resolveMatchedPrice("openrouter", "xiaomi/mimo-v2.6-pro")).toMatchObject({
+      jawcodeProvider: "openrouter",
+      cost4: { input: 0.435, output: 0.87, cacheRead: 0.0036, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified",
+    });
+    expect(resolveMatchedPrice("openrouter", "xiaomi/mimo-v2.6-flash")).toMatchObject({
+      jawcodeProvider: "openrouter",
+      cost4: { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 },
+      source: "jawcode",
+      status: "verified",
+    });
   });
 
   test("16. shipped overlay membership: 147 keys, including canonical Fable 5.1, Opus 5, Opus 5.5, OpenCode Go and compatibility prices", () => {

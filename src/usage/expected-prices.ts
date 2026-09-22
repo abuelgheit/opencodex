@@ -209,8 +209,9 @@ const DEVIN_SWE2_NOTE = "list rate; $0 self-serve through 2026-10-08 and 75%-off
 // Ollama Cloud official pay-as-you-go pricing. Ollama publishes one USD rate per model
 // with no separate cache-write billing, so cacheWrite is 0 on both rows below.
 const OLLAMA_CLOUD_PRICING = "https://ollama.com/pricing";
-// Ollama Cloud DeepSeek V4.1 Flash base rate: 0.22 in / 0.007 cached in / 0.66 out.
-const OLLAMA_CLOUD_DEEPSEEK_V41_FLASH: Cost4 = { input: 0.22, output: 0.66, cacheRead: 0.007, cacheWrite: 0 };
+// Ollama Cloud DeepSeek V4.1 Flash base rate: 0.15 in / 0.003 cached in / 0.60 out.
+// (0.22/0.007/0.66 belongs to the sibling deepseek-v4-flash row, not this id.)
+const OLLAMA_CLOUD_DEEPSEEK_V41_FLASH: Cost4 = { input: 0.15, output: 0.60, cacheRead: 0.003, cacheWrite: 0 };
 // Ollama Cloud GLM-5.3 Flash base rate: 0.15 in / 0.03 cached in / 0.50 out.
 const OLLAMA_CLOUD_GLM_53_FLASH: Cost4 = { input: 0.15, output: 0.50, cacheRead: 0.03, cacheWrite: 0 };
 
