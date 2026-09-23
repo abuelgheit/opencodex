@@ -36,9 +36,15 @@ beforeEach(() => {
   // The page also has a held memory cache: each test gets a distinct report identity.
   apiBase = `http://usage-custom-${++sequence}`;
   requests = [];
-  globalThis.fetch = ((input: RequestInfo | URL) => new Promise<Response>(resolve => {
-    requests.push({ url: String(input), resolve });
-  })) as typeof fetch;
+  globalThis.fetch = ((input: RequestInfo | URL) => {
+    const url = String(input);
+    // This file gates the usage report only. The page also loads the provider-quota report, so
+    // anything else settles immediately instead of joining the usage gate list.
+    if (!url.includes("/api/usage")) return Promise.resolve(Response.json({}));
+    return new Promise<Response>(resolve => {
+      requests.push({ url, resolve });
+    });
+  }) as typeof fetch;
 });
 
 afterEach(async () => {
@@ -125,22 +131,24 @@ test("Usage model table renders cache breakdown and marks unavailable telemetry"
   // Header labels come from the catalog the page renders, so a copy change stays a
   // one-place edit and this case keeps asserting the column ORDER it cares about --
   // identity, then the three comparison figures, then the per-request detail with the
-  // five cache columns last.
+  // tok/s column and the cache columns last.
   expect([...table!.querySelectorAll("thead th")].map(cell => cell.textContent?.trim())).toEqual([
     "logs.col.model", "logs.col.provider", "usage.col.share", "usage.col.tokens",
     "usage.col.apiListPrice", "usage.col.requests", "usage.col.measured",
-    "usage.col.inputTokens", "usage.col.outputTokens", "usage.col.cacheHits",
-    "usage.col.cacheWrites", "usage.col.cacheHitRate",
+    "usage.col.inputTokens", "usage.col.outputTokens", "logs.col.tokPerSec",
+    "usage.col.cacheHits", "usage.col.cacheWrites", "usage.col.cacheHitRate",
   ].map(key => en[key as keyof typeof en]));
   const rows = table!.querySelectorAll("tbody tr");
   expect(rows).toHaveLength(3);
   const cells = (row: Element) => [...row.querySelectorAll("td")].map(cell => cell.textContent?.trim());
   // The hit-rate cell carries the rate and, when coverage is partial or absent, the same
   // sentence twice over: a `title` for a pointer and an `sr-only` span for everyone else.
-  const hitRateCell = (row: Element) => row.querySelectorAll("td")[11]!;
+  const hitRateCell = (row: Element) => row.querySelectorAll("td")[12]!;
   const hitRate = (row: Element) => hitRateCell(row).querySelector(".usage-hit-rate")?.textContent?.trim();
   const coverageNote = (row: Element) => hitRateCell(row).querySelector(".sr-only")?.textContent ?? null;
-  expect(cells(rows[0]!).slice(7, 11)).toEqual(["1000", "120", "600", "100"]);
+  // These rows carry no decode rate, so the tok/s cell between output tokens and cache hits
+  // renders the unavailable marker.
+  expect(cells(rows[0]!).slice(7, 12)).toEqual(["1000", "120", "—", "600", "100"]);
   expect(hitRate(rows[0]!)).toBe("60%");
   // A row whose cache detail covers its whole input needs no coverage caveat.
   expect(hitRateCell(rows[0]!).getAttribute("title")).toBeNull();
@@ -148,12 +156,12 @@ test("Usage model table renders cache breakdown and marks unavailable telemetry"
   // Half this row's input never reported cache detail. The rate is still an average over the
   // half that did, so it is reported with its coverage rather than withheld.
   const partialNote = en["usage.cacheHitRate.partial"].replace("{measured}", "500").replace("{total}", "1000");
-  expect(cells(rows[1]!).slice(9, 11)).toEqual(["450", "0"]);
+  expect(cells(rows[1]!).slice(10, 12)).toEqual(["450", "0"]);
   expect(hitRate(rows[1]!)).toBe("90%");
   expect(hitRateCell(rows[1]!).getAttribute("title")).toBe(partialNote);
   expect(coverageNote(rows[1]!)).toBe(partialNote);
   // Nothing in this row reported cache detail at all, which is the one case with no basis.
-  expect(cells(rows[2]!).slice(9, 11)).toEqual(["—", "—"]);
+  expect(cells(rows[2]!).slice(10, 12)).toEqual(["—", "—"]);
   expect(hitRate(rows[2]!)).toBe("—");
   expect(hitRateCell(rows[2]!).getAttribute("title")).toBe(en["usage.cacheHitRate.unmeasured"]);
   expect(coverageNote(rows[2]!)).toBe(en["usage.cacheHitRate.unmeasured"]);
@@ -307,7 +315,8 @@ test("America/Santiago midnight DST retains final-day activity and tooltip", asy
 
 test("Apply submits inclusive bounds once; Clear restores the held preset without custom cache entries", async () => {
   await mount();
-  expect(requests[0].url).toBe(`${apiBase}/api/usage?range=30d&surface=all`);
+  // The default preset in this fork is Today, so the held preset report is the today window.
+  expect(requests[0].url).toBe(`${apiBase}/api/usage?range=today&surface=all`);
   await respond(0, "preset-report-marker");
   const held = sessionEntries();
   expect(held).toHaveLength(1);
@@ -316,7 +325,7 @@ test("Apply submits inclusive bounds once; Clear restores the held preset withou
   expect(container.textContent).toContain("preset-report-marker");
   await apply();
   expect(requests).toHaveLength(2);
-  expect(requests[1].url).toBe(`${apiBase}/api/usage?range=30d&surface=all&${boundsQuery}`);
+  expect(requests[1].url).toBe(`${apiBase}/api/usage?range=today&surface=all&${boundsQuery}`);
   for (const name of ["Available history", "30d", "7d"]) expect(preset(name).getAttribute("aria-pressed")).toBe("false");
   expect(container.textContent).not.toContain("preset-report-marker");
   expect(container.textContent).toContain("Loading usage data");
@@ -341,10 +350,10 @@ test("Apply submits inclusive bounds once; Clear restores the held preset withou
   expect(startInput().value).toBe("");
   expect(endInput().value).toBe("");
   expect(interval()).toBeUndefined();
-  expect(preset("30d").getAttribute("aria-pressed")).toBe("true");
+  expect(preset("Today").getAttribute("aria-pressed")).toBe("true");
   expect(container.textContent).toContain("preset-report-marker");
   expect(container.textContent).not.toContain("custom-report-marker");
-  expect(requests.at(-1)!.url).toBe(`${apiBase}/api/usage?range=30d&surface=all`);
+  expect(requests.at(-1)!.url).toBe(`${apiBase}/api/usage?range=today&surface=all`);
   await act(async () => { root!.unmount(); });
   root = undefined;
   container.remove();
@@ -357,7 +366,7 @@ test("Apply submits inclusive bounds once; Clear restores the held preset withou
   expect(container.textContent).not.toContain("custom-report-marker");
   expect(container.textContent).not.toContain("preset-report-marker");
   expect(container.textContent).toContain("Loading usage data");
-  expect(requests.at(-1)!.url).toBe(`${apiBase}/api/usage?range=30d&surface=all&${boundsQuery}`);
+  expect(requests.at(-1)!.url).toBe(`${apiBase}/api/usage?range=today&surface=all&${boundsQuery}`);
 });
 
 test("missing, partial, invalid and reversed drafts make no request or applied-state change", async () => {
@@ -400,11 +409,11 @@ test("new bounds never show a held report or a superseded request that settles l
   // Change only until, then only since: each bound independently owns a new request.
   await enter("2020-09-15T10:20", "2020-09-15T10:22");
   await apply();
-  expect(requests[2].url).toBe(`${apiBase}/api/usage?range=30d&surface=all&since=${since}&until=${until + 60_000}`);
+  expect(requests[2].url).toBe(`${apiBase}/api/usage?range=today&surface=all&since=${since}&until=${until + 60_000}`);
   expect(container.textContent).not.toContain("first-custom-marker");
   await enter("2020-09-15T10:21", "2020-09-15T10:22");
   await apply();
-  expect(requests[3].url).toBe(`${apiBase}/api/usage?range=30d&surface=all&since=${since + 60_000}&until=${until + 60_000}`);
+  expect(requests[3].url).toBe(`${apiBase}/api/usage?range=today&surface=all&since=${since + 60_000}&until=${until + 60_000}`);
   await respond(2, "late-superseded-marker");
   expect(container.textContent).not.toContain("late-superseded-marker");
   expect(container.textContent).not.toContain("preset-stale-marker");
@@ -421,15 +430,15 @@ test("Apply preserves machine key, surface and hub scope; choosing a preset clea
   await respond(1, "machine-grok-report");
   await enter("2020-09-15T10:20", "2020-09-15T10:21");
   await apply();
-  expect(requests[2].url).toBe(`${apiBase}/api/usage?range=30d&surface=grok&apiKeyId=machine%2Fkey+%2B+one&${boundsQuery}`);
+  expect(requests[2].url).toBe(`${apiBase}/api/usage?range=today&surface=grok&apiKeyId=machine%2Fkey+%2B+one&${boundsQuery}`);
   await respond(2, "machine-custom-report");
   const hub = [...container.querySelectorAll<HTMLButtonElement>(".usage-scope-control button")].find(button => button.textContent === "Hub-wide")!;
   await click(hub);
-  expect(requests[3].url).toBe(`${apiBase}/api/usage?range=30d&surface=grok&${boundsQuery}`);
+  expect(requests[3].url).toBe(`${apiBase}/api/usage?range=today&surface=grok&${boundsQuery}`);
   await respond(3, "hub-custom-report");
   await enter("2020-09-15T10:20", "2020-09-15T10:22");
   await apply();
-  expect(requests[4].url).toBe(`${apiBase}/api/usage?range=30d&surface=grok&since=${since}&until=${until + 60_000}`);
+  expect(requests[4].url).toBe(`${apiBase}/api/usage?range=today&surface=grok&since=${since}&until=${until + 60_000}`);
   await respond(4, "hub-new-custom-report");
   await click(preset("7d"));
   expect(requests.at(-1)!.url).toBe(`${apiBase}/api/usage?range=7d&surface=grok`);
@@ -485,7 +494,7 @@ test("the range panel is closed until asked for, and collapsing it keeps the app
 
   await enter("2020-09-15T10:20", "2020-09-15T10:21");
   await apply();
-  expect(requests[1].url).toBe(`${apiBase}/api/usage?range=30d&surface=all&${boundsQuery}`);
+  expect(requests[1].url).toBe(`${apiBase}/api/usage?range=today&surface=all&${boundsQuery}`);
   await respond(1, "custom-report-marker");
   const applied = interval();
   expect(applied).toContain("both inclusive");

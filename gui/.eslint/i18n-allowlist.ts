@@ -38,6 +38,8 @@ const BRAND_LITERALS_LOWER = new Set(
 /** Single-token technical units / abbreviations shown next to numbers. */
 const TECHNICAL_UNITS = new Set([
   "ms",
+  // Seconds suffix on a formatted duration (`1.5s`); the same unit class as "ms" above.
+  "s",
   "k",
   "1M",
   "c",

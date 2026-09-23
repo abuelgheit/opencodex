@@ -70,6 +70,14 @@ async function mount(node: React.ReactNode): Promise<HTMLElement> {
   return container;
 }
 
+/** Select a range preset by its visible label (Today/7d/30d/Available history). */
+async function selectPreset(container: HTMLElement, label: string): Promise<void> {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".usage-segmented-btn"))
+    .find(candidate => candidate.textContent === label);
+  if (!button) throw new Error(`missing range preset ${label}`);
+  await act(async () => { button.click(); });
+}
+
 function usagePayload(models: Array<{ provider: string; model: string; requests: number; totalTokens: number }> = []) {
   const yesterday = isoDay(-1);
   const today = isoDay();
@@ -95,6 +103,9 @@ function usagePayload(models: Array<{ provider: string; model: string; requests:
 test("Usage heatmap exposes one roving entry and day/week keyboard movement", async () => {
   globalThis.fetch = (async () => Response.json(usagePayload())) as typeof fetch;
   const container = await mount(<Usage apiBase="http://usage-chart-test" />);
+  // The default range in this fork is Today, whose chart is the hourly bars. The daily
+  // heatmap grid this case exercises renders for the multi-day presets, so select one first.
+  await selectPreset(container, "30d");
   await waitFor(() => container.querySelector(".heatmap-grid") !== null);
 
   expect(container.querySelector(".heatmap-grid")?.getAttribute("role")).toBe("group");
@@ -127,10 +138,9 @@ test("Usage heatmap exposes one roving entry and day/week keyboard movement", as
 test("seven-day bars expose the same detail on focus and touch", async () => {
   globalThis.fetch = (async () => Response.json(usagePayload())) as typeof fetch;
   const container = await mount(<Usage apiBase="http://usage-bars-test" />);
+  await selectPreset(container, "30d");
   await waitFor(() => container.querySelector(".heatmap-grid") !== null);
-  const sevenDay = Array.from(container.querySelectorAll<HTMLButtonElement>(".usage-segmented-btn"))
-    .find(button => button.textContent === "7d")!;
-  await act(async () => { sevenDay.click(); });
+  await selectPreset(container, "7d");
   await waitFor(() => container.querySelectorAll(".daybar").length === 7);
 
   const bars = container.querySelectorAll<HTMLElement>(".daybar");
@@ -163,10 +173,9 @@ test("Usage tooltip portals stay inside viewport gutters at the lower-right edge
   }));
   globalThis.fetch = (async () => Response.json(usagePayload(models))) as typeof fetch;
   const container = await mount(<Usage apiBase="http://usage-tip-bounds-test" />);
+  await selectPreset(container, "30d");
   await waitFor(() => container.querySelector(".heatmap-grid") !== null);
-  const sevenDay = Array.from(container.querySelectorAll<HTMLButtonElement>(".usage-segmented-btn"))
-    .find(button => button.textContent === "7d")!;
-  await act(async () => { sevenDay.click(); });
+  await selectPreset(container, "7d");
   await waitFor(() => container.querySelectorAll(".daybar").length === 7);
 
   const today = container.querySelectorAll<HTMLElement>(".daybar")[6]!;
