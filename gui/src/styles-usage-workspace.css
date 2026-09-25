@@ -5,7 +5,7 @@
    ============================================================================ */
 
 .main-inner:has(.usage-workspace-shell) {
-  max-width: 1200px;
+  max-width: 1600px;
 }
 
 .usage-workspace-shell {
