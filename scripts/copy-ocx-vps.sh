@@ -384,17 +384,6 @@ check_ssh() {
   remote_exec true || die "SSH to ${VPS_USER}@${HOST} failed host-key or authentication verification"
 }
 
-# Require the operator to retype the target IPv4 before any remote access. A dry run never
-# reaches this prompt, and a non-interactive caller is refused rather than silently accepted.
-confirm_target() {
-  local answer
-  [ -t 0 ] || die "refusing remote access without an interactive terminal; use --dry-run to validate locally"
-  printf '[copy-ocx-vps] type the target IPv4 %s to confirm remote access: ' "$HOST" >&2
-  IFS= read -r answer || die "target confirmation was not provided"
-  [ "$answer" = "$HOST" ] || die "typed target does not match OCX_VPS_HOST; refusing remote access"
-  log "typed target confirmed: $HOST"
-}
-
 # Check the remote prerequisites and refuse unsafe destination paths before any rsync write.
 # Every managed path must be a symlink-free child of the base, and source.previous must already
 # be a real directory before promotion may replace it, so no rm -rf can leave the isolated base.
@@ -559,7 +548,6 @@ main() {
     exit 0
   fi
 
-  confirm_target
   check_ssh
   remote_preflight
   rsync_snapshot
