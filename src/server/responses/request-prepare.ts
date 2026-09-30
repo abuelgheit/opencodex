@@ -809,6 +809,7 @@ export async function prepareResponsesRequest(
         try {
           const reparsed = parseRequest(body);
           const kept: Array<keyof OcxParsedRequest> = [
+            "_anthropicExtras",
             "_previousResponseInputExpanded",
             "_providerContinuation",
             "_providerContinuationCandidate",

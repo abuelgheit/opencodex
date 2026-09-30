@@ -7,6 +7,10 @@ opencodex 在 `/v1/responses` 之外還提供 `POST /v1/messages`（以及 `coun
 Code 可以使用每一個已路由的供應商——包括 OAuth 登入、帳號池、金鑰故障轉移和 sidecar——
 而無需進行任何額外的身分驗證設定。
 
+當最終適配器指向原生 Anthropic 端點（`api.anthropic.com`）時，Claude safeguards 會以請求中的
+`safeguards` 和回應中的 `safeguard_results` 透傳。在其他閘道或非 Anthropic 路由上，這兩個欄位
+以及對應的 beta 標頭會一起丟棄，避免產生不支援參數錯誤。
+
 ## Claude OAuth 帳號池（實驗性）
 
 你可以透過 Providers 儀表板登入多個 Claude 帳號（`ocx login anthropic` / add-account）。預設

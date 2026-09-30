@@ -7,6 +7,11 @@ opencodex は `/v1/responses` と共に `POST /v1/messages`(`count_tokens` も)�
 Code から OAuth ログイン、アカウントプール、キーフェイルオーバー、サイドカーを含むすべてのルーティングプロバイダーを別途の
 認証作業なしで使えます。
 
+Claude の safeguards は、最終アダプターがネイティブ Anthropic エンドポイント
+（`api.anthropic.com`）を対象とする場合、リクエストの `safeguards` とレスポンスの
+`safeguard_results` として引き継がれます。それ以外のゲートウェイや非 Anthropic ルートでは、
+未対応パラメーターエラーを起こさないよう、両方のフィールドと beta ヘッダーを一緒に破棄します。
+
 ## クイックスタート
 
 ```bash

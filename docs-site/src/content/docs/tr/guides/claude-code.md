@@ -8,6 +8,11 @@ opencodex, `/v1/responses` uç noktasının yanında `POST /v1/messages` (artı
 işlemiyle yönlendirilen tüm sağlayıcıları — OAuth girişleri, hesap havuzları,
 anahtar yük devretme ve sidecar'lar dahil — kullanabilir.
 
+Claude safeguards, son adaptör yerel Anthropic uç noktasını (`api.anthropic.com`) hedeflediğinde
+istekte `safeguards` ve yanıtta `safeguard_results` olarak aktarılır. Diğer ağ geçitlerinde veya
+Anthropic olmayan rotalarda, desteklenmeyen parametre hatası oluşmaması için her iki alan ve beta
+başlığı birlikte atılır.
+
 ## Claude OAuth hesap havuzu (deneysel)
 
 Sağlayıcılar kontrol panelinden (`ocx login anthropic` / hesap ekle) birden

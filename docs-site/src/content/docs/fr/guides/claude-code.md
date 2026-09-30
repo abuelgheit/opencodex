@@ -7,6 +7,11 @@ opencodex sert `POST /v1/messages` (ainsi que count_tokens) parallèlement à `/
 ainsi utiliser tous les fournisseurs routés, y compris les connexions, les groupes de comptes, le basculement de
 clé et les services auxiliaires, sans configuration d'authentification supplémentaire.
 
+Les safeguards Claude sont transmis comme requête `safeguards` et réponse `safeguard_results` lorsque
+l’adaptateur final cible l’endpoint Anthropic natif (`api.anthropic.com`). Sur les autres passerelles
+ou routes non Anthropic, les deux champs ainsi que leur en-tête beta sont ignorés ensemble, sans erreur
+de paramètre non pris en charge.
+
 ## Groupe de comptes OAuth Claude (expérimental)
 
 Vous pouvez vous connecter à plusieurs comptes Claude via le tableau de bord des fournisseurs (`ocx login anthropic` /

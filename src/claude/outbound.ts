@@ -273,6 +273,7 @@ export function responsesSseToAnthropicSse(
   let blockIndex = 0;
   let open: OpenBlock | null = null;
   let sawToolUse = false;
+  let safeguardResults: unknown;
   let webSearchRequests = 0;
   let earlyAnthropicUsage: Rec | undefined;
   let pingTimer: ReturnType<typeof setInterval> | undefined;
@@ -388,7 +389,11 @@ export function responsesSseToAnthropicSse(
         closeOpenBlock();
         emit("message_delta", {
           type: "message_delta",
-          delta: { stop_reason: stopReason, stop_sequence: null },
+          delta: {
+            stop_reason: stopReason,
+            stop_sequence: null,
+            ...(safeguardResults !== undefined ? { safeguard_results: safeguardResults } : {}),
+          },
           usage: anthropicUsage(usage, webSearchRequests),
         });
         emit("message_stop", { type: "message_stop" });
@@ -658,6 +663,9 @@ export function responsesSseToAnthropicSse(
           }
           case "response.completed": {
             const response = isRec(data.response) ? data.response : {};
+            if (response.safeguard_results !== undefined) {
+              safeguardResults = response.safeguard_results;
+            }
             if (response.end_turn === false && !sawToolUse) {
               fail(529, "upstream turn ended without a final answer", true);
               break;
@@ -980,6 +988,7 @@ export async function collectAnthropicMessage(
   let openBlock: Rec | null = null;
   let toolJson = "";
   let stopReason: string | null = "end_turn";
+  let safeguardResults: unknown;
   let usage: Rec = anthropicUsage(undefined);
   let error: Rec | null = null;
   const replaceRetained = (previous: string, next: string, kind: "live_transient" | "retained_collectors") => {
@@ -1029,6 +1038,7 @@ export async function collectAnthropicMessage(
       case "message_delta": {
         const delta = isRec(data.delta) ? data.delta : {};
         if (typeof delta.stop_reason === "string") stopReason = delta.stop_reason;
+        if (delta.safeguard_results !== undefined) safeguardResults = delta.safeguard_results;
         if (isRec(data.usage)) usage = data.usage;
         break;
       }
@@ -1079,5 +1089,6 @@ export async function collectAnthropicMessage(
     stop_reason: stopReason,
     stop_sequence: null,
     usage,
+    ...(safeguardResults !== undefined ? { safeguard_results: safeguardResults } : {}),
   };
 }

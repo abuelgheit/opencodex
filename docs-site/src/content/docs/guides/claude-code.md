@@ -7,6 +7,11 @@ opencodex serves `POST /v1/messages` (plus `count_tokens`) alongside `/v1/respon
 Code can use every routed provider — OAuth logins, account pools, key failover and sidecars
 included — with zero extra auth work.
 
+Claude safeguards pass through as `safeguards` requests and `safeguard_results` responses when the
+final adapter targets the native Anthropic endpoint (`api.anthropic.com`). On other gateway or
+non-Anthropic routes, both the safeguards and their beta header are dropped together rather than
+causing an unsupported-parameter error.
+
 For an Anthropic route on stored OAuth or an Anthropic API key, native Fast is available on
 `claude-opus-5-5`, `claude-opus-5`, and `claude-opus-4-8`: pick the model's `--fast` row (listed
 when Fast rows are enabled) or set `fastMode: true`. Claude Code's own `/fast` toggle is not

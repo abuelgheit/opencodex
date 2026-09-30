@@ -61,7 +61,7 @@ export function claudeCompatibilityReason(codes: readonly ClaudeFeatureCode[], s
 
 const BODY_FIELDS = new Set([
   "model", "max_tokens", "messages", "system", "tools", "tool_choice", "thinking",
-  "output_config", "metadata", "service_tier", "stop_sequences", "stream",
+  "output_config", "metadata", "service_tier", "stop_sequences", "stream", "safeguards",
   "temperature", "top_p", "top_k", "cache_control", "context_management",
   "container", "inference_geo", "user_profile_id", "mcp_servers", "defer_tools", "deferred_tools",
 ]);

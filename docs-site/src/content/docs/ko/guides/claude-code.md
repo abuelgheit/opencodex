@@ -7,6 +7,11 @@ opencodex는 `/v1/responses`와 함께 `POST /v1/messages`(및 `count_tokens`)�
 Code에서 OAuth 로그인, 계정 풀, 키 장애 조치, 사이드카를 포함한 모든 라우팅 제공자를 별도의
 인증 작업 없이 사용할 수 있어요.
 
+Claude safeguards는 최종 어댑터가 네이티브 Anthropic 엔드포인트(`api.anthropic.com`)를 대상으로
+할 때 요청의 `safeguards`와 응답의 `safeguard_results`로 전달돼요. 다른 게이트웨이나
+Anthropic이 아닌 경로에서는 지원되지 않는 매개변수 오류를 만들지 않도록 두 필드와 beta 헤더를
+함께 삭제해요.
+
 ## 빠른 시작
 
 ```bash

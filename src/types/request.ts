@@ -1,6 +1,7 @@
 import type { KiroOAuthMetadata } from "../oauth/types";
 import type { OcxTool, OcxToolChoice } from "./tools";
 import type { TierDecision, TierObservationContext } from "./provider";
+import type { AnthropicExtras } from "../lib/anthropic-extras";
 
 /** Exact provider/credential namespace for process-local reasoning replay. */
 export interface OcxReasoningReplayIdentity {
@@ -55,6 +56,8 @@ export interface OcxParsedRequest {
   stream: boolean;
   options: OcxRequestOptions;
   _rawBody?: unknown;
+  /** Proxy-injected Claude passthrough data, populated only from the Claude inbound path. */
+  _anthropicExtras?: AnthropicExtras;
   /**
    * Boundary between replayed history and this turn's newly appended input. Usually the
    * items the proxy restored from local previous_response_id state; also set when the
@@ -392,6 +395,8 @@ export type AdapterEvent =
       /** Native opaque compaction ciphertext returned by a Responses backend. */
       compactionEncryptedContent?: string;
       stopReason?: string;
+      /** Anthropic safeguard results captured from the terminal upstream event. */
+      safeguardResults?: unknown;
       endTurn?: boolean;
       providerState?: OcxProviderContinuationState;
     }

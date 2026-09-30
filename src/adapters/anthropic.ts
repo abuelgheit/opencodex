@@ -1141,6 +1141,11 @@ export function createAnthropicAdapter(provider: OcxProviderConfig, cacheRetenti
       }
       if (provider.headers) Object.assign(headers, provider.headers);
       mergeAnthropicBetaHeader(headers, fastSpeed?.betas ?? []);
+      const extras = parsed._anthropicExtras;
+      if (usesNativeAnthropicEndpoint(provider)) {
+        if (extras?.safeguards !== undefined) body.safeguards = extras.safeguards;
+        if (extras?.anthropicBeta) mergeAnthropicBetaHeader(headers, [extras.anthropicBeta]);
+      }
 
       // Prompt caching: native Anthropic supports top-level automatic caching, which
       // follows the moving final block across turns. Keep one breakpoint slot free for it.
@@ -1188,6 +1193,7 @@ export function createAnthropicAdapter(provider: OcxProviderConfig, cacheRetenti
       let currentToolCallJson = "";
       let pendingUsage: PendingAnthropicUsage;
       let pendingStopReason: string | undefined;
+      let pendingSafeguardResults: unknown;
       let emittedDone = false;
       let sawVisibleText = false;
 
@@ -1217,6 +1223,7 @@ export function createAnthropicAdapter(provider: OcxProviderConfig, cacheRetenti
           type: "done",
           usage: usageFromAnthropic(pendingUsage),
           ...(pendingStopReason ? { stopReason: pendingStopReason } : {}),
+          ...(pendingSafeguardResults !== undefined ? { safeguardResults: pendingSafeguardResults } : {}),
         };
       };
 
@@ -1342,8 +1349,12 @@ export function createAnthropicAdapter(provider: OcxProviderConfig, cacheRetenti
                 pendingUsage = mergeAnthropicUsage(pendingUsage, usage);
                 // Later frames win: a speed here (not seen live, but usage is cumulative) supersedes message_start.
                 observeAnthropicSpeed(usage, tierMetadata);
-                const delta = data.delta as { stop_reason?: unknown } | undefined;
-                if (typeof delta?.stop_reason === "string") pendingStopReason = delta.stop_reason;
+                const delta = data.delta;
+                if (delta !== null && typeof delta === "object" && !Array.isArray(delta)) {
+                  const deltaRecord = delta as Record<string, unknown>;
+                  if (typeof deltaRecord.stop_reason === "string") pendingStopReason = deltaRecord.stop_reason;
+                  if (Object.hasOwn(deltaRecord, "safeguard_results")) pendingSafeguardResults = deltaRecord.safeguard_results;
+                }
                 break;
               }
               case "message_stop": {
@@ -1404,6 +1415,7 @@ export function createAnthropicAdapter(provider: OcxProviderConfig, cacheRetenti
             type: "done",
             usage: usageFromAnthropic(pendingUsage),
             ...(pendingStopReason ? { stopReason: pendingStopReason } : {}),
+            ...(pendingSafeguardResults !== undefined ? { safeguardResults: pendingSafeguardResults } : {}),
           };
         } else if (provider.anthropicEofTolerance === true) {
           // AgentRouter-style compatibility profile (#658): the upstream can close the stream

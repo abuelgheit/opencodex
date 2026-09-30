@@ -21,6 +21,7 @@ import { decodeReasoningEnvelope } from "./reasoning-envelope";
 import { extractHostedWebSearch, WEB_SEARCH_TOOL_NAME } from "../web-search/synthetic-tool";
 import { buildImageTool, extractHostedImageGeneration, IMAGE_GEN_TOOL_NAME } from "../images/synthetic-tool";
 import { toolSearchDescription, toolSearchParameters } from "./tool-search-compat";
+import { readAnthropicExtras, stripAnthropicExtras } from "../lib/anthropic-extras";
 
 import { isObj, inputContentParts, outputTextOf, outputToToolResultContent, toolOutputContainsEncryptedContent } from "./parser-content";
 import { mapToolChoice, buildTools, customToolNamespaces } from "./parser-tools";
@@ -126,6 +127,7 @@ export function parseRequest(
   parseOptions?: { replayCacheScope?: OcxReasoningReplayScopeRef },
 ): OcxParsedRequest {
   const replayCacheScope = parseOptions?.replayCacheScope;
+  const anthropicExtras = readAnthropicExtras(body);
   const replayedInputPrefixLength = previousResponseReplayPrefixLength(body);
   const parsed = responsesRequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -605,7 +607,8 @@ export function parseRequest(
     context,
     stream: data.stream === true,
     options,
-    _rawBody: body,
+    _rawBody: stripAnthropicExtras(body),
+    ...(anthropicExtras ? { _anthropicExtras: anthropicExtras } : {}),
     ...(replayedInputPrefixLength > 0 ? { _replayPrefixLen: replayedInputPrefixLength } : {}),
     ...(continuationConversationMessageIndex !== undefined
       ? { _continuationConversationMessageIndex: continuationConversationMessageIndex }

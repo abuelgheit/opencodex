@@ -7,6 +7,10 @@ opencodex 在 `/v1/responses` 之外还提供 `POST /v1/messages`（以及 `coun
 Code 可以使用每一个已路由的提供商——包括 OAuth 登录、账户池、密钥故障转移和 sidecar——
 而无需进行任何额外的身份验证配置。
 
+当最终适配器指向原生 Anthropic 端点（`api.anthropic.com`）时，Claude safeguards 会以请求中的
+`safeguards` 和响应中的 `safeguard_results` 透传。在其他网关或非 Anthropic 路由上，这两个字段
+以及对应的 beta 标头会一起丢弃，从而不会产生不支持参数错误。
+
 ## 快速开始
 
 ```bash

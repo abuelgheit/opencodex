@@ -59,6 +59,15 @@ function responseError(status: number, type: string, message: string): OcxErrorP
   return classifyError(status, type, message);
 }
 
+/** Omit classifier verdicts from response-state persistence while preserving the emitted payload. */
+function responseForPersistence(response: Record<string, unknown>): Record<string, unknown> {
+  if (!Object.hasOwn(response, "safeguard_results")) return response;
+  // Copy only the completed response that carries the classifier verdict.
+  const persistedResponse = { ...response };
+  delete persistedResponse.safeguard_results;
+  return persistedResponse;
+}
+
 export type ResponsesTerminalStatus = "completed" | "failed" | "incomplete";
 
 export function bridgeToResponsesSSE(
@@ -1242,8 +1251,12 @@ export function bridgeToResponsesSSE(
                 reportTerminal("incomplete");
               } else {
                 await awaitThoughtSignatureDurability();
-                const response = { ...responseSnapshot("completed", finishedItems, event.endTurn), usage: responsesUsage(event.usage) };
-                options?.onCompletedResponse?.(response, event.providerState);
+                const response = {
+                  ...responseSnapshot("completed", finishedItems, event.endTurn),
+                  usage: responsesUsage(event.usage),
+                  ...(event.safeguardResults !== undefined ? { safeguard_results: event.safeguardResults } : {}),
+                };
+                options?.onCompletedResponse?.(responseForPersistence(response), event.providerState);
                 options?.onUsage?.(event.usage);
                 emit("response.completed", {
                   response,

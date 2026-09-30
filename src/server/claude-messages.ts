@@ -14,6 +14,7 @@ import {
   resolveAdmissionModelScope,
 } from "./admission-model-scope";
 import { jsonUtf8Bytes } from "../lib/json-byte-size";
+import { ANTHROPIC_EXTRAS_KEY } from "../lib/anthropic-extras";
 import { sseFieldValue } from "../lib/sse-decoder";
 import { uuidFromHex } from "../lib/prompt-cache-affinity";
 import { enforceAnthropicImageLimits, sniffImageDimensions } from "../adapters/anthropic-image-guard";
@@ -782,6 +783,13 @@ async function handleClaudeMessagesWithBudget(
     // inbound one.
     if (fastRow) internalBody.service_tier = "priority";
     translatorBudget.chargeRetained(jsonUtf8Bytes(internalBody), { kind: "request_copies" });
+    if (isRec(anthropicBody) && Object.hasOwn(anthropicBody, "safeguards")) {
+      const beta = req.headers.get("anthropic-beta")?.trim();
+      internalBody[ANTHROPIC_EXTRAS_KEY] = {
+        safeguards: anthropicBody.safeguards,
+        ...(beta ? { anthropicBeta: beta } : {}),
+      };
+    }
     cacheKeySource = translation.cacheKeySource;
   } catch (err) {
     const overflow = isTranslatorBudgetExceededError(err);
