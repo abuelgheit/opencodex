@@ -3,7 +3,9 @@
 # Runs on the VPS only: it aborts on any address, DNS, OS, resource, port, or conflicting Compose
 # state before making a change. Caddy serves two hostnames: the data API hostname is data-only,
 # and the separate dashboard hostname is gated by OpenCodeX's own admin-token/session
-# authorization (there is no edge Basic Auth). The hub is published only on 127.0.0.1.
+# authorization (there is no edge Basic Auth). The hub is published only on 127.0.0.1. The hub
+# container clock is pinned to this VPS's own IANA time zone, so request-log and usage timestamps
+# match the operator's wall clock; OCX_TIME_ZONE overrides the zone explicitly.
 set -euo pipefail
 
 # Absolute location of this script; the default deploy root is its own directory.
@@ -25,6 +27,10 @@ MIN_FREE_DISK_MB="${OCX_MIN_FREE_DISK_MB:-2048}"
 MIN_FREE_MEM_MB="${OCX_MIN_FREE_MEM_MB:-1024}"
 MIN_UBUNTU_MAJOR="${OCX_MIN_UBUNTU_MAJOR:-22}"
 HEALTH_TIMEOUT="${OCX_HEALTH_TIMEOUT:-90}"
+# IANA zone for the hub container clock. Empty means "use this VPS's own zone"; the resolved value
+# is filled by check_time_zone during preflight and written into the generated Compose override.
+TIME_ZONE_REQUESTED="${OCX_TIME_ZONE:-}"
+TIME_ZONE=""
 
 # Deployment target, supplied as explicit non-secret arguments by the copy script.
 TARGET_IP="${OCX_VPS_HOST:-}"
@@ -80,6 +86,7 @@ Overrides:
   OCX_HOST_PORT            Loopback host port for the hub (default 10100).
   OCX_INTERNAL_NETWORK     Private Compose network (default ocx-internal).
   OCX_CADDY_IMAGE          Caddy image (default caddy:2.8-alpine).
+  OCX_TIME_ZONE            IANA zone for the hub container clock (default: this VPS's own zone).
   OCX_DASHBOARD_DOMAIN     Dashboard hostname when it is not passed as a flag.
   OCX_EXPECTED_PUBLIC_IP   Deprecated alias for --target-ip, kept for compatibility.
 EOF
@@ -110,6 +117,63 @@ validate_hostname() {
   return 0
 }
 
+# True when the argument has the shape of an IANA zone name. Existence in the zoneinfo database is
+# checked by resolve_time_zone, the only place allowed to read /usr/share/zoneinfo.
+validate_time_zone_name() {
+  local zone="$1"
+  [ -n "$zone" ] || return 1
+  [ "${#zone}" -le 64 ] || return 1
+  case "$zone" in
+    /* | */ | *..* | *[[:space:]]*) return 1 ;;
+  esac
+  case "$zone" in
+    *[!A-Za-z0-9_+/-]*) return 1 ;;
+  esac
+  return 0
+}
+
+# Read this host's IANA time zone from systemd, /etc/timezone, or the /etc/localtime link. Prints
+# an empty string when the host reports none, leaving the caller to fall back explicitly.
+detect_host_time_zone() {
+  local zone=""
+  if command -v timedatectl >/dev/null 2>&1; then
+    zone="$(timedatectl show -p Timezone --value 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+  fi
+  if [ -z "$zone" ] && [ -r /etc/timezone ]; then
+    zone="$(head -n1 /etc/timezone 2>/dev/null | tr -d '[:space:]' || true)"
+  fi
+  if [ -z "$zone" ] && [ -L /etc/localtime ]; then
+    zone="$(readlink /etc/localtime 2>/dev/null | sed -n 's#.*/zoneinfo/##p' || true)"
+  fi
+  printf '%s' "$zone"
+}
+
+# Resolve the hub container's clock: OCX_TIME_ZONE wins, otherwise this VPS's own zone, otherwise
+# UTC. The name must also exist under /usr/share/zoneinfo, so the container can load it at start.
+resolve_time_zone() {
+  local zone="$TIME_ZONE_REQUESTED" origin="OCX_TIME_ZONE"
+  if [ -z "$zone" ]; then
+    zone="$(detect_host_time_zone)"
+    origin="this host"
+  fi
+  if [ -z "$zone" ]; then
+    zone="UTC"
+    origin="fallback"
+  fi
+  validate_time_zone_name "$zone" \
+    || die "time zone '$zone' detected from $origin is not a valid IANA zone name"
+  if [ -d /usr/share/zoneinfo ] && [ ! -f "/usr/share/zoneinfo/$zone" ]; then
+    die "time zone '$zone' from $origin is not installed under /usr/share/zoneinfo; install tzdata or set OCX_TIME_ZONE"
+  fi
+  printf '%s' "$zone"
+}
+
+# Pin the hub container clock and report the zone the generated Compose override will carry.
+check_time_zone() {
+  TIME_ZONE="$(resolve_time_zone)"
+  log "hub container clock will use time zone $TIME_ZONE"
+}
+
 # Reject names and paths that would corrupt the generated Compose file or Caddy block.
 validate_config() {
   case "$DEPLOY_ROOT" in /*) : ;; *) die "OCX_DEPLOY_ROOT must be absolute: $DEPLOY_ROOT" ;; esac
@@ -121,6 +185,10 @@ validate_config() {
   validate_hostname "$DASHBOARD_DOMAIN" || die "--dashboard-domain must be a valid public hostname"
   [ "$DASHBOARD_DOMAIN" != "$DOMAIN" ] \
     || die "--dashboard-domain must differ from --domain so the dashboard is not exposed on the API host"
+  if [ -n "$TIME_ZONE_REQUESTED" ]; then
+    validate_time_zone_name "$TIME_ZONE_REQUESTED" \
+      || die "OCX_TIME_ZONE is not a valid IANA zone name: $TIME_ZONE_REQUESTED"
+  fi
   case "$PROJECT_NAME" in
     ''|*[!A-Za-z0-9_.-]*) die "OCX_PROJECT_NAME is not a safe Compose project name: $PROJECT_NAME" ;;
   esac
@@ -283,6 +351,7 @@ check_compose_conflicts() {
 # Nothing below writes host or container state, so --dry-run makes no changes.
 run_preflight() {
   check_os_version
+  check_time_zone
   check_package_availability
   check_source
   # Reject an unsafe pre-existing generated Caddyfile before any install or write occurs.
@@ -321,6 +390,8 @@ install_and_start_docker() {
 
 # Write the generated Compose override atomically so a partial write cannot corrupt Compose.
 write_compose_override() {
+  # The deploy path always resolves TIME_ZONE in the preflight; never write a guessed value.
+  [ -n "$TIME_ZONE" ] || die "hub time zone was not resolved; refusing to write the Compose override"
   mkdir -p "$DEPLOY_ROOT"
   local tmp
   tmp="$(mktemp "$DEPLOY_ROOT/.compose.vps.XXXXXX")"
@@ -328,6 +399,9 @@ write_compose_override() {
 # Generated by deploy-ocx-vps.sh; do not edit. Re-runnable and safe to delete.
 services:
   hub:
+    environment:
+      # Pin the container clock so request-log and usage timestamps use the VPS time zone.
+      TZ: ${TIME_ZONE}
     networks:
       - ${INTERNAL_NETWORK}
   caddy:
@@ -570,6 +644,16 @@ deploy_compose() {
   log "project $PROJECT_NAME is running with a loopback hub and two Caddy sites"
 }
 
+# Prove the running hub resolves the same zone the Compose override pinned, not UTC.
+check_container_time_zone() {
+  local reported
+  reported="$(compose exec -T hub bun -e \
+    'process.stdout.write(Intl.DateTimeFormat().resolvedOptions().timeZone)' 2>/dev/null | tr -d '\r\n' || true)"
+  [ "$reported" = "$TIME_ZONE" ] \
+    || die "hub container reports time zone '${reported:-unresolved}', expected '$TIME_ZONE'"
+  log "hub container clock is pinned to $TIME_ZONE"
+}
+
 # Poll the loopback health endpoint until it answers or the timeout expires.
 wait_for_health() {
   local deadline=$((SECONDS + HEALTH_TIMEOUT))
@@ -705,6 +789,7 @@ Plan:
   project         $PROJECT_NAME in $SOURCE_DIR
   publication     hub only on 127.0.0.1:$HOST_PORT; Caddy on 80 and 443 for both hostnames
   network         private Compose network $INTERNAL_NETWORK
+  time zone       ${TIME_ZONE_REQUESTED:-resolved from this VPS during preflight} for the hub container clock
   volumes         ocx/codex/caddy volumes preserved across reruns; token bootstrapped once
   config          hub.managementPublicOrigin set to https://$DASHBOARD_DOMAIN, other settings kept
   checks          Ubuntu, packages, source, host address, both DNS names, resources, ports
@@ -760,6 +845,7 @@ main() {
   trap on_exit EXIT
   deploy_compose
   wait_for_health
+  check_container_time_zone
   wait_for_https
   check_public_boundary
   check_authenticated_catalog
