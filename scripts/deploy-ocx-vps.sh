@@ -838,6 +838,9 @@ main() {
     exit 0
   fi
 
+  # A migrated host owns its proxy separately; never reclaim ports or TLS volumes.
+  [ ! -e "$DEPLOY_ROOT/external-proxy-managed" ] \
+    || die "external proxy is managed separately; use the devtools-vps hub-only deployment"
   run_preflight
   install_and_start_docker
   preflight_docker
